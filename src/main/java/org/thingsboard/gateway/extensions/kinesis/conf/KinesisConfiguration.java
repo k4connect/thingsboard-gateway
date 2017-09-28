@@ -10,5 +10,5 @@ import java.util.List;
 @Data
 public class KinesisConfiguration {
 
-    public String file;
+    public String stream;
 }
