@@ -182,6 +182,11 @@
             <version>${jsonassert.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>amazon-kinesis-client</artifactId>
+            <version>1.8.5</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -242,6 +247,7 @@
                             <owner>The Thingsboard Authors</owner>
                         </properties>
                         <excludes>
+                            <exclude>run.sh</exclude>
                             <exclude>**/.env</exclude>
                             <exclude>**/README</exclude>
                             <exclude>**/LICENSE</exclude>
@@ -251,6 +257,7 @@
                             <exclude>src/sh/**</exclude>
                             <exclude>src/main/scripts/control/**</exclude>
                             <exclude>src/main/scripts/windows/**</exclude>
+                            <exclude>**/kinesis/**</exclude>
                         </excludes>
                         <mapping>
                             <conf>SCRIPT_STYLE</conf>
