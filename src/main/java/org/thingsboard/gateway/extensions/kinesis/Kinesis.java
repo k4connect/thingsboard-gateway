@@ -120,6 +120,8 @@ public class Kinesis {
         ObjectMapper mapper = new ObjectMapper();
         KinesisMessage message;
 
+
+
         try {
             message = mapper.readValue(body, KinesisMessage.class);
         } catch (Exception e)
@@ -134,49 +136,94 @@ public class Kinesis {
             return;
         }
 
-        if(!message.path.isEmpty())
+        //log.info(body);
+
+        
+        try {
+            parseVariablesEvents(message);
+            parseController(message);
+        } catch (Exception e) {
+            log.error("Failed to send. Body: {} Exception: {}", body, e);
+        }
+
+
+        
+ 
+
+        //attributes - serial no, etc
+
+
+        
+        log.info("KinesisMessage {}/{}", message.analyticsId, message.path);
+    }
+
+
+    private void parseController(KinesisMessage message) throws Exception
+    {
+
+        List<TsKvEntry> telemetry = new ArrayList<>();
+
+        LongDataEntry lastData = new LongDataEntry("lastData", message.timestamp);
+        telemetry.add(new BasicTsKvEntry(message.timestamp, lastData));
+
+
+        if(message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") )
         {
-            String[] parts = message.path.split("/");
+            //from the controller
+
+            if(message.type != null && message.type.equals("connect"))
+            {
+
+                BooleanDataEntry data = new BooleanDataEntry("online", true);
+                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
+
+                waitWithTimeout(gateway.onDeviceConnect(message.analyticsId, "Controller"));
+
+            } else if(message.type != null && message.type.equals("disconnect"))
+            {
+                BooleanDataEntry data = new BooleanDataEntry("online", false);
+                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
+
+                waitWithTimeout(gateway.onDeviceDisconnect(message.analyticsId).get());
+                
+                
+            }
+
+        }
+
+        waitWithTimeout(gateway.onDeviceTelemetry(message.analyticsId, telemetry));
+
+    }
+
+    private void parseVariablesEvents(KinesisMessage message) throws Exception
+    {
+        if(message.path != null && !message.path.isEmpty())
+        {
 
             if(message.path.contains("variables"))
             {
-                String variable = parts[parts.length - 1];
+                String variable = message.path.substring(message.path.indexOf("/variables/") + 11);
                 String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
+                
+                postTelemetry(device, variable, message.value, message.timestamp);
 
-                StringDataEntry data = new StringDataEntry(variable, message.value);
-
-                List<TsKvEntry> telemetry = new ArrayList<>();
-                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
-
-                try {
-                    waitWithTimeout(gateway.onDeviceTelemetry(device, telemetry));
-
-                } catch (Exception e)
-                {
-                    log.error("Failed to send telemetry. {}", e);
-                }
 
             } else if(message.path.contains("events"))
             {
                 
             }
         }
- 
+    }
 
-        //telemetry - variables
-        //alarms - events
-        //attributes - serial no, etc
-        //connect / disconnect
-        
-        
 
-        
+    private void postTelemetry(String device, String variable, String value, Long timestamp) throws Exception
+    {
+        StringDataEntry data = new StringDataEntry(variable, value);
 
-        
-        //onDeviceDisconnect?
+        List<TsKvEntry> telemetry = new ArrayList<>();
+        telemetry.add(new BasicTsKvEntry(timestamp, data));
 
-        
-        log.info("KinesisMessage {}/{}", message.analyticsId, message.path);
+        waitWithTimeout(gateway.onDeviceTelemetry(device, telemetry));
     }
 
     private void waitWithTimeout(Future future) throws Exception {
