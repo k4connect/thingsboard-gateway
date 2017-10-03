@@ -2,13 +2,14 @@ package org.thingsboard.gateway.extensions.kinesis;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.thingsboard.gateway.extensions.kinesis.conf.KinesisConfiguration;
+import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
 import org.thingsboard.gateway.service.MqttDeliveryFuture;
 import org.thingsboard.gateway.service.data.DeviceData;
 import org.thingsboard.gateway.util.JsonTools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 
 import java.net.InetAddress;
 import java.util.UUID;
@@ -34,14 +35,15 @@ import java.util.concurrent.TimeUnit;
 
 import org.thingsboard.server.common.data.kv.*;
 
-
 @Slf4j
 public class Kinesis {
 
     //private static final int OPERATION_TIMEOUT_IN_SEC = 10;
 
+
+
     private GatewayService gateway;
-    private KinesisConfiguration configuration;
+    private KinesisStreamConfiguration configuration;
 
     private Worker worker;
 
@@ -55,7 +57,7 @@ public class Kinesis {
 
     private static AWSCredentialsProvider credentialsProvider;
 
-    public Kinesis(GatewayService service, KinesisConfiguration c) {
+    public Kinesis(GatewayService service, KinesisStreamConfiguration c) {
         this.gateway = service;
         this.configuration = c;
     }
@@ -118,6 +120,9 @@ public class Kinesis {
     public void processBody(String body) {
 
         ObjectMapper mapper = new ObjectMapper();
+
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
         KinesisMessage message;
 
 
@@ -135,9 +140,6 @@ public class Kinesis {
         {
             return;
         }
-
-        //log.info(body);
-
         
         try {
             parseVariablesEvents(message);
@@ -146,15 +148,6 @@ public class Kinesis {
             log.error("Failed to send. Body: {} Exception: {}", body, e);
         }
 
-
-        
- 
-
-        //attributes - serial no, etc
-
-
-        
-        log.info("KinesisMessage {}/{}", message.analyticsId, message.path);
     }
 
 
@@ -163,7 +156,7 @@ public class Kinesis {
 
         List<TsKvEntry> telemetry = new ArrayList<>();
 
-        LongDataEntry lastData = new LongDataEntry("lastData", message.timestamp);
+        StringDataEntry lastData = new StringDataEntry("lastData", Long.toString(message.timestamp));
         telemetry.add(new BasicTsKvEntry(message.timestamp, lastData));
 
 
@@ -197,7 +190,8 @@ public class Kinesis {
 
     private void parseVariablesEvents(KinesisMessage message) throws Exception
     {
-        if(message.path != null && !message.path.isEmpty())
+        //skip anything without a path, and everyting not in devices
+        if(message.path != null && !message.path.isEmpty() && message.path.indexOf("Devices") == 0)
         {
 
             if(message.path.contains("variables"))
@@ -210,7 +204,17 @@ public class Kinesis {
 
             } else if(message.path.contains("events"))
             {
+
+                if((message.path.contains("Bridges") || message.path.contains("Servers")) && message.path.contains("/events/started"))
+                {
+                    String device = message.analyticsId + "/" + message.path.replace("/events/started", "");
+                    postTelemetry(device, "started",  Long.toString(message.timestamp), message.timestamp);
+                }
+
                 
+
+                //Devices/Living Room/Controller/Bridges/Zwave/events/started
+                log.info("Path: {} Type: {} Value: {}", message.path, message.type, message.value);
             }
         }
     }
