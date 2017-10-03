@@ -41,6 +41,14 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
 
     private final CharsetDecoder decoder = Charset.forName("UTF-8").newDecoder();
 
+    private Kinesis extension;
+
+    public  AmazonKinesisApplicationRecordProcessor(Kinesis extension)
+    {
+        super();
+        this.extension = extension;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -116,14 +124,11 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
 
         String data = null;
         try {
-            // For this app, we interpret the payload as UTF-8 chars.
-            data = decoder.decode(record.getData()).toString();
-            // Assume this record came from AmazonKinesisSample and log its age.
-            long recordCreateTime = new Long(data.substring("testData-".length()));
-            long ageOfRecordInMillis = System.currentTimeMillis() - recordCreateTime;
 
-            LOG.info(record.getSequenceNumber() + ", " + record.getPartitionKey() + ", " + data + ", Created "
-                    + ageOfRecordInMillis + " milliseconds ago.");
+            data = decoder.decode(record.getData()).toString();
+            extension.processBody(data);
+
+
         } catch (NumberFormatException e) {
             LOG.info("Record does not match sample record format. Ignoring record with data; " + data);
         } catch (CharacterCodingException e) {

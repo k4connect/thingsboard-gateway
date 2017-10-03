@@ -8,6 +8,8 @@ import org.thingsboard.gateway.service.MqttDeliveryFuture;
 import org.thingsboard.gateway.service.data.DeviceData;
 import org.thingsboard.gateway.util.JsonTools;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.InetAddress;
 import java.util.UUID;
 
@@ -24,6 +26,15 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.thingsboard.server.common.data.kv.*;
+
+
 @Slf4j
 public class Kinesis {
 
@@ -33,6 +44,8 @@ public class Kinesis {
     private KinesisConfiguration configuration;
 
     private Worker worker;
+
+    private static final int OPERATION_TIMEOUT_IN_SEC = 10;
     
     private static final String APPLICATION_NAME = "ThingsboardKinesisApplication";
 
@@ -82,7 +95,7 @@ public class Kinesis {
                         workerId);
         kinesisClientLibConfiguration.withInitialPositionInStream(APPLICATION_INITIAL_POSITION_IN_STREAM);
 
-        IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory();
+        IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory(this);
 
         worker = new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(kinesisClientLibConfiguration).build();
 
@@ -96,14 +109,78 @@ public class Kinesis {
     }
 
     public void stop() {
-        /*if (reader != null) {
-            reader.interrupt();
-        }*/
+        
+        worker.shutdown();
+
     }
 
-    private void processBody(String body, KinesisConfiguration configuration) throws Exception {
+    //needs to be called from inside KCL
+    public void processBody(String body) {
+
+        ObjectMapper mapper = new ObjectMapper();
+        KinesisMessage message;
+
+        try {
+            message = mapper.readValue(body, KinesisMessage.class);
+        } catch (Exception e)
+        {
+            log.error("Failed to parse message body. {}", e);
+            return; 
+        }
+
+        //TESTING
+        if(!message.analyticsId.equals("d2cb6b5e-2745-4ce2-b5b2-2dec4b42f49c"))
+        {
+            return;
+        }
+
+        if(!message.path.isEmpty())
+        {
+            String[] parts = message.path.split("/");
+
+            if(message.path.contains("variables"))
+            {
+                String variable = parts[parts.length - 1];
+                String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
+
+                StringDataEntry data = new StringDataEntry(variable, message.value);
+
+                List<TsKvEntry> telemetry = new ArrayList<>();
+                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
+
+                try {
+                    waitWithTimeout(gateway.onDeviceTelemetry(device, telemetry));
+
+                } catch (Exception e)
+                {
+                    log.error("Failed to send telemetry. {}", e);
+                }
+
+            } else if(message.path.contains("events"))
+            {
+                
+            }
+        }
+ 
+
+        //telemetry - variables
+        //alarms - events
+        //attributes - serial no, etc
+        //connect / disconnect
+        
         
 
+        
+
+        
+        //onDeviceDisconnect?
+
+        
+        log.info("KinesisMessage {}/{}", message.analyticsId, message.path);
+    }
+
+    private void waitWithTimeout(Future future) throws Exception {
+        future.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
     }
 
     
