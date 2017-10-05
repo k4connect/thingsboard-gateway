@@ -156,32 +156,18 @@ public class Kinesis {
 
         List<TsKvEntry> telemetry = new ArrayList<>();
 
-        StringDataEntry lastData = new StringDataEntry("lastData", Long.toString(message.timestamp));
-        telemetry.add(new BasicTsKvEntry(message.timestamp, lastData));
-
-
-        if(message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") )
+        if(message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") && message.type != null && message.type.equals("disconnect") )
         {
-            //from the controller
+            //controller disconnect
+            BooleanDataEntry data = new BooleanDataEntry("online", false);
+            telemetry.add(new BasicTsKvEntry(message.timestamp, data)); 
 
-            if(message.type != null && message.type.equals("connect"))
-            {
+        } else {
+            BooleanDataEntry data = new BooleanDataEntry("online", true);
+            telemetry.add(new BasicTsKvEntry(message.timestamp, data));
 
-                BooleanDataEntry data = new BooleanDataEntry("online", true);
-                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
-
-                waitWithTimeout(gateway.onDeviceConnect(message.analyticsId, "Controller"));
-
-            } else if(message.type != null && message.type.equals("disconnect"))
-            {
-                BooleanDataEntry data = new BooleanDataEntry("online", false);
-                telemetry.add(new BasicTsKvEntry(message.timestamp, data));
-
-                waitWithTimeout(gateway.onDeviceDisconnect(message.analyticsId).get());
-                
-                
-            }
-
+            StringDataEntry lastData = new StringDataEntry("lastData", Long.toString(message.timestamp));
+            telemetry.add(new BasicTsKvEntry(message.timestamp, lastData));
         }
 
         waitWithTimeout(gateway.onDeviceTelemetry(message.analyticsId, telemetry));
