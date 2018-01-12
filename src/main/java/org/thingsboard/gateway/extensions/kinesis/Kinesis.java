@@ -134,12 +134,6 @@ public class Kinesis {
             log.error("Failed to parse message body. {}", e);
             return; 
         }
-
-        //TESTING
-        if(!message.analyticsId.equals("d2cb6b5e-2745-4ce2-b5b2-2dec4b42f49c"))
-        {
-            return;
-        }
         
         try {
             parseVariablesEvents(message);
