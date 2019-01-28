@@ -592,9 +592,11 @@ public class MqttGatewayService implements GatewayService, MqttCallback, IMqttMe
 
     private MqttClient initMqttClient() {
         try {
+            MqttHandler mqttHandler = getMqttHandler();
             MqttClientConfig mqttClientConfig = getMqttClientConfig();
+            System.out.println("MQTT Config " + mqttClientConfig);
             mqttClientConfig.setUsername(connection.getSecurity().getAccessToken());
-            tbClient = MqttClient.create(mqttClientConfig);
+            tbClient = MqttClient.create(mqttClientConfig, mqttHandler);
             tbClient.setEventLoop(nioEventLoopGroup);
             Promise<MqttConnectResult> connectResult = (Promise<MqttConnectResult>) tbClient.connect(connection.getHost(), connection.getPort());
             connectResult.addListener(future -> {
@@ -610,7 +612,6 @@ public class MqttGatewayService implements GatewayService, MqttCallback, IMqttMe
             });
             connectResult.get(connection.getConnectionTimeout(), TimeUnit.MILLISECONDS);
 
-            MqttHandler mqttHandler = getMqttHandler();
             tbClient.on(DEVICE_ATTRIBUTES_TOPIC, mqttHandler).await(connection.getConnectionTimeout(), TimeUnit.MILLISECONDS);
             tbClient.on(DEVICE_GET_ATTRIBUTES_RESPONSE_PLUS_TOPIC, mqttHandler).await(connection.getConnectionTimeout(), TimeUnit.MILLISECONDS);
             tbClient.on(DEVICE_GET_ATTRIBUTES_RESPONSE_PLUS_TOPIC, mqttHandler).await(connection.getConnectionTimeout(), TimeUnit.MILLISECONDS);

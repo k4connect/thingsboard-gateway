@@ -25,6 +25,10 @@ updates:
   # Enable/disable updates checking.
   enabled: "${UPDATES_ENABLED:true}"
 
+kinesis:
+  enabled: true
+  configuration: kinesis-config.json
+
 gateways:
   tenants:
     -

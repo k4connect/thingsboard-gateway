@@ -1,0 +1,11 @@
+{
+	"AWSEBDockerrunVersion": "1",
+	"Image": {
+		"Name": "490730494544.dkr.ecr.us-east-1.amazonaws.com/thingsboard-gateway:latest",
+		"Update": "true"
+	},
+	"Ports": [
+		{ "ContainerPort": 9090 }
+	],
+	"Volumes": []
+}
