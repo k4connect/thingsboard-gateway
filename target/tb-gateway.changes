@@ -1,0 +1,19 @@
+Format: 1.8
+Date: Thu, 24 Jan 2019 16:36:06 -0500
+Source: tb-gateway
+Binary: tb-gateway
+Architecture: all
+Version: 1.4.0-1
+Urgency: low
+Maintainer: leonardoferreira
+Changed-By: leonardoferreira
+Description:
+ tb-gateway - tb-gateway
+Changes:
+ tb-gateway (1.4.0-1) ; urgency=low
+Checksums-Sha1:
+ 1c3dbbda9dc44e22f7995eddbb1accc181d5ddef 36947616 tb-gateway.deb
+Checksums-Sha256:
+ 79b32825bc8c16bda19b57645d3889be1e78010abddfb042c77c52f5954ea484 36947616 tb-gateway.deb
+Files:
+ 906e7f151d9493ad80cb426301685c12 36947616 java optional tb-gateway.deb

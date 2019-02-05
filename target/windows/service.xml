@@ -1,0 +1,14 @@
+<service>
+    <id>tb-gateway</id>
+    <name>Thingsboard Gateway</name>
+    <description>Gateway that simplifies legacy and external systems integration with Thingsboard platform. Contains
+        OPC-UA, MQTT and other extensions</description>
+    <workingdirectory>%BASE%\conf</workingdirectory>
+    <logpath>%BASE%\logs</logpath>
+    <logmode>rotate</logmode>
+    <env name="LOADER_PATH" value="%BASE%\conf" />
+    <executable>java</executable>
+    <startargument>-Dplatform=windows</startargument>
+    <startargument>-jar</startargument>
+    <startargument>%BASE%\lib\tb-gateway.jar</startargument>
+</service>

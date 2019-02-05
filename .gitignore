@@ -13,7 +13,6 @@ storage/**
 */.project
 .project
 .cache/**
-target/
 build/
 tmp_deb_control/
 tmp_rpm_control/
@@ -28,7 +27,6 @@ pom.xml.versionsBackup
 **/.gradle
 **/local.properties
 **/build
-**/target
 **/Californium.properties
 **/.env
 .instance_id

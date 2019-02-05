@@ -1,0 +1,5 @@
+#!/bin/sh
+
+if [ -e /var/run/tb-gateway/tb-gateway.pid ]; then
+    service tb-gateway stop
+fi

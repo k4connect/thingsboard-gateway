@@ -1,0 +1,11 @@
+[Unit]
+Description=tb-gateway
+After=syslog.target
+
+[Service]
+User=thingsboard
+ExecStart=/usr/share/tb-gateway/bin/tb-gateway.jar
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

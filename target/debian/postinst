@@ -1,0 +1,20 @@
+#!/bin/sh -e
+
+ec() {
+    echo "$@" >&2
+    "$@"
+}
+
+case "$1" in
+    configure)
+        
+
+        
+        
+chown -R thingsboard: /var/log/tb-gateway
+chown -R thingsboard: /usr/share/tb-gateway
+update-rc.d tb-gateway defaults
+
+        
+        ;;
+esac

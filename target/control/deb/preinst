@@ -1,0 +1,18 @@
+#!/bin/sh
+
+if ! getent group thingsboard >/dev/null; then
+    addgroup --system thingsboard
+fi
+
+if ! getent passwd thingsboard >/dev/null; then
+    adduser --quiet \
+            --system \
+            --ingroup thingsboard \
+            --quiet \
+            --disabled-login \
+            --disabled-password \
+            --home /usr/share/tb-gateway \
+            --no-create-home \
+            -gecos "Thingsboard application" \
+            thingsboard
+fi

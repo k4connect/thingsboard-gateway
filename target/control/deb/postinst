@@ -1,0 +1,5 @@
+#!/bin/sh
+
+chown -R thingsboard: /var/log/tb-gateway
+chown -R thingsboard: /usr/share/tb-gateway
+update-rc.d tb-gateway defaults

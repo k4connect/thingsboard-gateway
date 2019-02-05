@@ -1,0 +1,7 @@
+/usr/share/tb-gateway/conf/tb-gateway.conf
+/usr/share/tb-gateway/conf/tb-gateway.yml
+/usr/share/tb-gateway/conf/logback.xml
+/usr/share/tb-gateway/conf/mqtt-config.json
+/usr/share/tb-gateway/conf/opc-config.json
+/usr/share/tb-gateway/conf/http-config.json
+/usr/share/tb-gateway/conf/kinesis-config.json
