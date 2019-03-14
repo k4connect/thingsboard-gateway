@@ -34,7 +34,7 @@ public class DefaultKinesisService {
         log.info("Initializing Kinesis service!");
         KinesisConfiguration configuration;
         try {
-            configuration = ConfigurationTools.readConfiguration(configurationFile, KinesisConfiguration.class);
+            configuration = ConfigurationTools.readFileConfiguration(configurationFile, KinesisConfiguration.class);
         } catch (Exception e) {
             log.error("Kinesis service configuration failed!", e);
             throw e;
