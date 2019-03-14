@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisConfiguration;
-import org.thingsboard.gateway.service.GatewayService;
+import org.thingsboard.gateway.service.gateway.GatewayService;
 import org.thingsboard.gateway.util.ConfigurationTools;
 
 import javax.annotation.PostConstruct;

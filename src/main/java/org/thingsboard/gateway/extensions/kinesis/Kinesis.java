@@ -3,7 +3,7 @@ package org.thingsboard.gateway.extensions.kinesis;
 import lombok.extern.slf4j.Slf4j;
 
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisConfiguration;
-import org.thingsboard.gateway.service.GatewayService;
+import org.thingsboard.gateway.service.gateway.GatewayService;
 import org.thingsboard.gateway.service.MqttDeliveryFuture;
 import org.thingsboard.gateway.service.data.DeviceData;
 import org.thingsboard.gateway.util.JsonTools;
