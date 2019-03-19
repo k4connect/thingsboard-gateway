@@ -1,7 +1,7 @@
 {
-	"kinesisStreamConfigurations":[
+	"kinesisStreamConfigurations": [
 		{
-			"stream": "K4EventStream"
+			"stream": "K4EventStream-test"
 		}
 	]
 }
