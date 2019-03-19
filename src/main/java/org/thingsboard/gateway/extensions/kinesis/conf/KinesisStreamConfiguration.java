@@ -1,0 +1,14 @@
+package org.thingsboard.gateway.extensions.kinesis.conf;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * Created by ashvayka on 15.05.17.
+ */
+@Data
+public class KinesisStreamConfiguration {
+
+    public String stream;
+}

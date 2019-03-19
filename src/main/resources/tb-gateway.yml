@@ -48,3 +48,7 @@ gateways:
           id: "http"
           type: "HTTP"
           extensionConfiguration: http-config.json
+        -
+          id: "kinesis"
+          type: "Kinesis"
+          extensionConfiguration: kinesis-config.json

@@ -130,6 +130,8 @@ buildDeb {
     configurationFile("${pkgInstallFolder}/conf/http-config.json")
     configurationFile("${pkgInstallFolder}/conf/modbus-config.json")
 
+    configurationFile("${pkgInstallFolder}/conf/kinesis-config.json")
+
     preInstall file("${buildDir}/control/deb/preinst")
     postInstall file("${buildDir}/control/deb/postinst")
     preUninstall file("${buildDir}/control/deb/prerm")
