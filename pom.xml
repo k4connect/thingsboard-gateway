@@ -197,6 +197,12 @@
             <artifactId>amazon-kinesis-client</artifactId>
             <version>1.8.5</version>
         </dependency>
+        <dependency>
+            <groupId>nl.jqno.equalsverifier</groupId>
+            <artifactId>equalsverifier</artifactId>
+            <version>3.1.7</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
