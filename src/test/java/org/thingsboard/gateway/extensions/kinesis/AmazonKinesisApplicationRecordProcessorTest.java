@@ -1,5 +1,8 @@
 package org.thingsboard.gateway.extensions.kinesis;
 
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -13,6 +16,13 @@ import static org.mockito.Mockito.spy;
 import static org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfigurationTest.TEST_STREAM_NAME;
 
 import java.lang.NullPointerException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
@@ -20,7 +30,9 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingExcepti
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.model.Record;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,6 +61,9 @@ public class AmazonKinesisApplicationRecordProcessorTest {
 
     @Mock
     IRecordProcessorCheckpointer checkpointer;
+
+    @Mock
+    ProcessRecordsInput processRecordsInput;
 
     private AmazonKinesisApplicationRecordProcessor processorSpy;
 
@@ -154,5 +169,60 @@ public class AmazonKinesisApplicationRecordProcessorTest {
         processorSpy.shutdown(shutdownInput);
 
         then(processorSpy).should().shutdown(shutdownInput);
+    }
+
+
+    @Test
+    public void shouldProcessRecordsWithValidData()
+            throws CharacterCodingException {
+
+        String someTestData = "foobar";
+        List<Record> records = makeRecordList(someTestData, UTF_8);
+        setupProcessRecordsInputStubs(records);
+
+        processorSpy.processRecords(processRecordsInput);
+
+        then(processorSpy).should().processRecords(processRecordsInput);
+    }
+
+
+    private List<Record> makeRecordList(String someTestData, Charset charset)
+            throws CharacterCodingException {
+
+        CharsetEncoder encoder = Charset.forName(charset.name()).newEncoder();
+        CharBuffer charBuffer = CharBuffer.wrap(someTestData.toCharArray());
+        ByteBuffer buffer = encoder.encode(charBuffer);
+
+        Record dataRecord = new Record().withData(buffer);
+        List<Record> records = new ArrayList();
+        records.add(dataRecord);
+
+        return records;
+    }
+
+
+    private void setupProcessRecordsInputStubs(List<Record> records) {
+        given(processRecordsInput.getRecords()).willReturn(records);
+        given(processRecordsInput.getCheckpointer()).willReturn(checkpointer);
+        willCallRealMethod().given(processorSpy).processRecords(processRecordsInput);
+    }
+
+
+    @Test
+    public void expectCharacterCodingExceptionWhenProcessRecords()
+            throws CharacterCodingException {
+
+        String someTestData = "Olé";
+
+        // Use ISO_8859_1 to cause a CharacterCodingException to occur in
+        // AmazonKinesisApplicationRecordProcessor.processRecords();
+        Charset charsetToCauseException = ISO_8859_1;
+
+        List<Record> records = makeRecordList(someTestData, charsetToCauseException);
+        setupProcessRecordsInputStubs(records);
+
+        processorSpy.processRecords(processRecordsInput);
+
+        then(processorSpy).should().processRecords(processRecordsInput);
     }
 }
