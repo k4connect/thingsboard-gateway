@@ -81,7 +81,7 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
 
     /**
      * Process records performing retries as needed. Skip "poison pill" records.
-     * 
+     *
      * @param records Data records to be processed.
      */
     private void processRecordsWithRetries(List<Record> records) {
@@ -116,21 +116,16 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
 
     /**
      * Process a single record.
-     * 
+     *
      * @param record The record to be processed.
      */
     private void processSingleRecord(Record record) {
-        // TODO Add your own record processing logic here
-
         String data = null;
         try {
 
             data = decoder.decode(record.getData()).toString();
             extension.processBody(data);
 
-
-        } catch (NumberFormatException e) {
-            LOG.info("Record does not match sample record format. Ignoring record with data; " + data);
         } catch (CharacterCodingException e) {
             LOG.error("Malformed data: " + data, e);
         }
