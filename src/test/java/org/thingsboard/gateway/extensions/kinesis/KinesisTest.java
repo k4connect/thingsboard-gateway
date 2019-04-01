@@ -75,6 +75,8 @@ public class KinesisTest {
 
     // TODO March 27, 2019: This test runs very slowly. Need to investigate
     // why or at least mark it with a category of slow tests.
+    // TODO April 1, 2019: The peformance issue appears to be caused by calling
+    // the init() method.
     @Test
     public void shouldCallInitWithAwsCredentials() {
         Kinesis extensionSpy = spy(new Kinesis(gateway, streamConfig));
@@ -124,5 +126,24 @@ public class KinesisTest {
 
             fail(errorMessage + ";\t" + e);
         }
+    }
+
+
+    // TODO March 27, 2019: This test runs very slowly. Need to investigate
+    // why or at least mark it with a category of slow tests.
+    // TODO April 1, 2019: The peformance issue appears to be caused by calling
+    // the init() method.
+    @Test
+    public void shouldCallStop() {
+        Kinesis extension = new Kinesis(gateway, streamConfig);
+        extension.init();
+
+        Kinesis extensionSpy = spy(extension);
+
+        willCallRealMethod().given(extensionSpy).stop();
+
+        extensionSpy.stop();
+
+        then(extensionSpy).should().stop();
     }
 }
