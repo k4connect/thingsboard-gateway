@@ -136,8 +136,13 @@ public class Kinesis {
         }
         
         try {
-            parseVariablesEvents(message);
-            parseController(message);
+            MqttDeliveryFuture future1 = parseVariablesEvents(message);
+            MqttDeliveryFuture future2 = parseController(message);
+
+            waitWithTimeout(future1);
+            if ( future2 != null ) {
+                waitWithTimeout(future2);
+            }
         } catch (Exception e) {
             log.error("Failed to send. Body: {} Exception: {}", body, e);
         }
@@ -145,7 +150,7 @@ public class Kinesis {
     }
 
 
-    private void parseController(KinesisMessage message) throws Exception
+    private MqttDeliveryFuture parseController(KinesisMessage message) throws Exception
     {
 
         List<TsKvEntry> telemetry = new ArrayList<>();
@@ -164,12 +169,14 @@ public class Kinesis {
             telemetry.add(new BasicTsKvEntry(message.timestamp, lastData));
         }
 
-        waitWithTimeout(gateway.onDeviceTelemetry(message.analyticsId, telemetry));
+        return gateway.onDeviceTelemetry(message.analyticsId, telemetry);
 
     }
 
-    private void parseVariablesEvents(KinesisMessage message) throws Exception
+    private MqttDeliveryFuture parseVariablesEvents(KinesisMessage message) throws Exception
     {
+        MqttDeliveryFuture future = null;
+
         //skip anything without a path, and everyting not in devices
         if(message.path != null && !message.path.isEmpty() && message.path.indexOf("Devices") == 0)
         {
@@ -179,7 +186,7 @@ public class Kinesis {
                 String variable = message.path.substring(message.path.indexOf("/variables/") + 11);
                 String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
                 
-                postTelemetry(device, variable, message.value, message.timestamp);
+                future = postTelemetry(device, variable, message.value, message.timestamp);
 
 
             } else if(message.path.contains("events"))
@@ -188,7 +195,7 @@ public class Kinesis {
                 if((message.path.contains("Bridges") || message.path.contains("Servers")) && message.path.contains("/events/started"))
                 {
                     String device = message.analyticsId + "/" + message.path.replace("/events/started", "");
-                    postTelemetry(device, "started",  Long.toString(message.timestamp), message.timestamp);
+                    future = postTelemetry(device, "started",  Long.toString(message.timestamp), message.timestamp);
                 }
 
                 
@@ -197,17 +204,19 @@ public class Kinesis {
                 log.info("Path: {} Type: {} Value: {}", message.path, message.type, message.value);
             }
         }
+
+        return future;
     }
 
 
-    private void postTelemetry(String device, String variable, String value, Long timestamp) throws Exception
+    private MqttDeliveryFuture postTelemetry(String device, String variable, String value, Long timestamp) throws Exception
     {
         StringDataEntry data = new StringDataEntry(variable, value);
 
         List<TsKvEntry> telemetry = new ArrayList<>();
         telemetry.add(new BasicTsKvEntry(timestamp, data));
 
-        waitWithTimeout(gateway.onDeviceTelemetry(device, telemetry));
+        return gateway.onDeviceTelemetry(device, telemetry);
     }
 
     private void waitWithTimeout(Future future) throws Exception {
