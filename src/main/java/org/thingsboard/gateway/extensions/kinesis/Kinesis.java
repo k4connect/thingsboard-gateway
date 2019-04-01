@@ -38,17 +38,13 @@ import org.thingsboard.server.common.data.kv.*;
 @Slf4j
 public class Kinesis {
 
-    //private static final int OPERATION_TIMEOUT_IN_SEC = 10;
-
-
-
     private GatewayService gateway;
     private KinesisStreamConfiguration configuration;
 
     private Worker worker;
 
     private static final int OPERATION_TIMEOUT_IN_SEC = 10;
-    
+
     private static final String APPLICATION_NAME = "ThingsboardKinesisApplication";
 
     // Initial position in the stream when the application starts up for the first time.
@@ -57,13 +53,15 @@ public class Kinesis {
 
     private static AWSCredentialsProvider credentialsProvider;
 
+
     public Kinesis(GatewayService service, KinesisStreamConfiguration c) {
         this.gateway = service;
         this.configuration = c;
     }
 
+
     public void init() {
-        
+
         // Ensure the JVM will refresh the cached IP values of AWS resources (e.g. service endpoints).
         java.security.Security.setProperty("networkaddress.cache.ttl", "60");
 
@@ -88,7 +86,7 @@ public class Kinesis {
         } catch (Exception e) {
             throw new AmazonClientException("Cannot create workerId");
         }
-        
+
 
         KinesisClientLibConfiguration kinesisClientLibConfiguration =
                 new KinesisClientLibConfiguration(APPLICATION_NAME,
@@ -107,16 +105,15 @@ public class Kinesis {
                 workerId);
 
         worker.run();
-
     }
+
 
     public void stop() {
-        
         worker.shutdown();
-
     }
 
-    //needs to be called from inside KCL
+
+    // needs to be called from inside KCL
     public void processBody(String body) {
 
         ObjectMapper mapper = new ObjectMapper();
@@ -126,21 +123,19 @@ public class Kinesis {
         KinesisMessage message;
 
 
-
         try {
             message = mapper.readValue(body, KinesisMessage.class);
-        } catch (Exception e)
-        {
+        } catch (Exception e) {
             log.error("Failed to parse message body. {}", e);
-            return; 
+            return;
         }
-        
+
         try {
             MqttDeliveryFuture future1 = parseVariablesEvents(message);
             MqttDeliveryFuture future2 = parseController(message);
 
             waitWithTimeout(future1);
-            if ( future2 != null ) {
+            if (future2 != null) {
                 waitWithTimeout(future2);
             }
         } catch (Exception e) {
@@ -150,16 +145,14 @@ public class Kinesis {
     }
 
 
-    private MqttDeliveryFuture parseController(KinesisMessage message) throws Exception
-    {
+    private MqttDeliveryFuture parseController(KinesisMessage message) throws Exception {
 
         List<TsKvEntry> telemetry = new ArrayList<>();
 
-        if(message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") && message.type != null && message.type.equals("disconnect") )
-        {
+        if (message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") && message.type != null && message.type.equals("disconnect")) {
             //controller disconnect
             BooleanDataEntry data = new BooleanDataEntry("online", false);
-            telemetry.add(new BasicTsKvEntry(message.timestamp, data)); 
+            telemetry.add(new BasicTsKvEntry(message.timestamp, data));
 
         } else {
             BooleanDataEntry data = new BooleanDataEntry("online", true);
@@ -170,37 +163,29 @@ public class Kinesis {
         }
 
         return gateway.onDeviceTelemetry(message.analyticsId, telemetry);
-
     }
 
-    private MqttDeliveryFuture parseVariablesEvents(KinesisMessage message) throws Exception
-    {
+
+    private MqttDeliveryFuture parseVariablesEvents(KinesisMessage message) throws Exception {
         MqttDeliveryFuture future = null;
 
-        //skip anything without a path, and everyting not in devices
-        if(message.path != null && !message.path.isEmpty() && message.path.indexOf("Devices") == 0)
-        {
+        // skip anything without a path, and everything not in devices
+        if (message.path != null && !message.path.isEmpty() && message.path.indexOf("Devices") == 0) {
 
-            if(message.path.contains("variables"))
-            {
+            if (message.path.contains("variables")) {
                 String variable = message.path.substring(message.path.indexOf("/variables/") + 11);
                 String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
-                
+
                 future = postTelemetry(device, variable, message.value, message.timestamp);
 
+            } else if (message.path.contains("events")) {
 
-            } else if(message.path.contains("events"))
-            {
-
-                if((message.path.contains("Bridges") || message.path.contains("Servers")) && message.path.contains("/events/started"))
-                {
+                if ((message.path.contains("Bridges") || message.path.contains("Servers")) && message.path.contains("/events/started")) {
                     String device = message.analyticsId + "/" + message.path.replace("/events/started", "");
                     future = postTelemetry(device, "started",  Long.toString(message.timestamp), message.timestamp);
                 }
 
-                
-
-                //Devices/Living Room/Controller/Bridges/Zwave/events/started
+                // Devices/Living Room/Controller/Bridges/Zwave/events/started
                 log.info("Path: {} Type: {} Value: {}", message.path, message.type, message.value);
             }
         }
@@ -209,8 +194,7 @@ public class Kinesis {
     }
 
 
-    private MqttDeliveryFuture postTelemetry(String device, String variable, String value, Long timestamp) throws Exception
-    {
+    private MqttDeliveryFuture postTelemetry(String device, String variable, String value, Long timestamp) throws Exception {
         StringDataEntry data = new StringDataEntry(variable, value);
 
         List<TsKvEntry> telemetry = new ArrayList<>();
@@ -219,9 +203,9 @@ public class Kinesis {
         return gateway.onDeviceTelemetry(device, telemetry);
     }
 
+
     private void waitWithTimeout(Future future) throws Exception {
         future.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
     }
 
-    
 }
