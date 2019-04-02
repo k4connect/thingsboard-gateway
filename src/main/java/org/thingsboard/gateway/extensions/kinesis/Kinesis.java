@@ -41,7 +41,9 @@ public class Kinesis {
     private GatewayService gateway;
     private KinesisStreamConfiguration configuration;
 
-    private Worker worker;
+    // Use default (package) scope so unit tests can insert mock object
+    Worker worker = null;
+
 
     private static final int OPERATION_TIMEOUT_IN_SEC = 10;
 
@@ -97,7 +99,9 @@ public class Kinesis {
 
         IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory(this);
 
-        worker = new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(kinesisClientLibConfiguration).build();
+        if (worker == null) {
+            worker = new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(kinesisClientLibConfiguration).build();
+        }
 
         log.info("Running {} to process stream {} as worker {}...",
                 APPLICATION_NAME,
@@ -149,7 +153,7 @@ public class Kinesis {
 
         List<TsKvEntry> telemetry = new ArrayList<>();
 
-        if (message.oid != null && message.oid.equals("1.3.6.1.4.1.32473.1.2") && message.type != null && message.type.equals("disconnect")) {
+        if (isControllerDisconnectMessage(message)) {
             //controller disconnect
             BooleanDataEntry data = new BooleanDataEntry("online", false);
             telemetry.add(new BasicTsKvEntry(message.timestamp, data));
@@ -166,12 +170,19 @@ public class Kinesis {
     }
 
 
+    private boolean isControllerDisconnectMessage(KinesisMessage message) {
+        return (message.oid != null &&
+                message.oid.equals("1.3.6.1.4.1.32473.1.2") &&
+                message.type != null &&
+                message.type.equals("disconnect"));
+    }
+
+
     private MqttDeliveryFuture parseVariablesEvents(KinesisMessage message) throws Exception {
         MqttDeliveryFuture future = null;
 
         // skip anything without a path, and everything not in devices
-        if (message.path != null && !message.path.isEmpty() && message.path.indexOf("Devices") == 0) {
-
+        if (isDeviceMessage(message)) {
             if (message.path.contains("variables")) {
                 String variable = message.path.substring(message.path.indexOf("/variables/") + 11);
                 String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
@@ -191,6 +202,13 @@ public class Kinesis {
         }
 
         return future;
+    }
+
+
+    private boolean isDeviceMessage(KinesisMessage message) {
+        return (message.path != null &&
+                !message.path.isEmpty() &&
+                message.path.indexOf("Devices") == 0);
     }
 
 
