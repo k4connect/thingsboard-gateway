@@ -11,6 +11,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willCallRealMethod;
 import static org.mockito.Mockito.spy;
 
+import static org.thingsboard.gateway.extensions.kinesis.Kinesis.EVENTS_STARTED_PATH;
 import static org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfigurationTest.TEST_STREAM_NAME;
 
 import java.io.IOException;
@@ -52,6 +53,20 @@ public class KinesisTest {
     private static final Path CREDENTIALS_FILE_PATH = Paths.get(CREDENTIALS_FILE_PATH_NAME);
     private static final Path NEW_CREDENTIALS_FILE_PATH = Paths.get(NEW_CREDENTIALS_FILE_PATH_NAME);
 
+    private static final String PATH_KEY = "path";
+
+    private static final String DEVICES_PATH = "Devices";
+    private static final String VARIABLES_PATH = "variables";
+    private static final String BRIDGES_PATH = makePath(DEVICES_PATH, "Bridges");
+    private static final String SERVERS_PATH = makePath(DEVICES_PATH, "Servers");
+    private static final String EVENTS_PATH = "events";
+
+    private static final String BRIDGES_EVENTS_STARTED_PATH = BRIDGES_PATH + EVENTS_STARTED_PATH;
+    private static final String SERVERS_EVENTS_STARTED_PATH = SERVERS_PATH + EVENTS_STARTED_PATH;
+
+    private static final String VARIABLES_MESSAGE_PATH = makePath(DEVICES_PATH, VARIABLES_PATH);
+    private static final String EVENTS_MESSAGE_PATH = makePath(DEVICES_PATH, EVENTS_PATH);
+
 
     @Mock
     private GatewayService gateway;
@@ -62,6 +77,11 @@ public class KinesisTest {
     private KinesisStreamConfiguration streamConfig = null;
     private Kinesis extension = null;
 
+
+
+    private static String makePath(String source, String suffix) {
+        return source + "/" + suffix;
+    }
 
 
     @Before
@@ -197,21 +217,101 @@ public class KinesisTest {
 
     @Test
     public void shouldCallProcessBodyWithVariablesEventsEmptyPath() {
-        String body = "{ \"path\": \"\" }";
+        String body = makeBody("");
+
         testProcessBody(body);
+    }
+
+
+    private String makeBody(String pathValue) {
+        return "{ \"" + PATH_KEY + "\": \"" + pathValue + "\" }";
     }
 
 
     @Test
     public void shouldCallProcessBodyWithVariablesEventsNonEmptyPath() {
-        String body = "{ \"path\": \"foobar\" }";
+        String body = makeBody("foobar");
+
         testProcessBody(body);
     }
 
 
     @Test
     public void shouldCallProcessBodyWithVariablesEventsDevicesPath() {
-        String body = "{ \"path\": \"Devices\" }";
+        String body = makeBody(DEVICES_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariablesEventsDevicesPathWithVariables() {
+        String body = makeBody(VARIABLES_MESSAGE_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariableEventsDevicesPathWithEvents() {
+        String body = makeBody(EVENTS_MESSAGE_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariableEventsDevicesPathWithBridgesEvents() {
+        String body = makeBody(makePath(BRIDGES_PATH, EVENTS_PATH));
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariableEventsDevicesPathWithBridgesNoEvents() {
+        String body = makeBody(BRIDGES_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariableEventsDevicesPathWithServersEvents() {
+        String body = makeBody(makePath(SERVERS_PATH, EVENTS_PATH));
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariableEventsDevicesPathWithServersNoEvents() {
+        String body = makeBody(SERVERS_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithStartedEventInvalidDevice() {
+        String body = makeBody(makePath(EVENTS_MESSAGE_PATH, "started/foobar"));
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithBridgesEventStarted() {
+        String body = makeBody(BRIDGES_EVENTS_STARTED_PATH);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersEventStarted() {
+        String body = makeBody(SERVERS_EVENTS_STARTED_PATH);
+
         testProcessBody(body);
     }
 }
