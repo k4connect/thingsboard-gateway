@@ -37,6 +37,7 @@ import org.thingsboard.server.common.data.kv.*;
 
 @Slf4j
 public class Kinesis {
+    public static final String EVENTS_STARTED_PATH = "/events/started";
 
     private GatewayService gateway;
     private KinesisStreamConfiguration configuration;
@@ -191,8 +192,9 @@ public class Kinesis {
 
             } else if (message.path.contains("events")) {
 
-                if ((message.path.contains("Bridges") || message.path.contains("Servers")) && message.path.contains("/events/started")) {
-                    String device = message.analyticsId + "/" + message.path.replace("/events/started", "");
+                if (isValidStartedEvent(message)) {
+                    String device =
+                        message.analyticsId + "/" + message.path.replace(EVENTS_STARTED_PATH, "");
                     future = postTelemetry(device, "started",  Long.toString(message.timestamp), message.timestamp);
                 }
 
@@ -212,6 +214,14 @@ public class Kinesis {
     }
 
 
+    private boolean isValidStartedEvent(KinesisMessage message) {
+        boolean isValidStartedDevice =
+            message.path.contains("Bridges") || message.path.contains("Servers");
+
+        return isValidStartedDevice && message.path.contains(EVENTS_STARTED_PATH);
+    }
+
+
     private MqttDeliveryFuture postTelemetry(String device, String variable, String value, Long timestamp) throws Exception {
         StringDataEntry data = new StringDataEntry(variable, value);
 
@@ -225,5 +235,4 @@ public class Kinesis {
     private void waitWithTimeout(Future future) throws Exception {
         future.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
     }
-
 }
