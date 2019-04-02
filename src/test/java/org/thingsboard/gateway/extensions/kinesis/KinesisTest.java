@@ -20,6 +20,7 @@ import java.nio.file.Paths;
 import java.security.Security;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -51,16 +52,24 @@ public class KinesisTest {
     private static final Path CREDENTIALS_FILE_PATH = Paths.get(CREDENTIALS_FILE_PATH_NAME);
     private static final Path NEW_CREDENTIALS_FILE_PATH = Paths.get(NEW_CREDENTIALS_FILE_PATH_NAME);
 
+
     @Mock
     private GatewayService gateway;
 
+    @Mock
+    private Worker worker;
+
     private KinesisStreamConfiguration streamConfig = null;
+    private Kinesis extension = null;
+
 
 
     @Before
     public void setup() {
         streamConfig = new KinesisStreamConfiguration();
         streamConfig.setStream(TEST_STREAM_NAME);
+
+        extension = new Kinesis(gateway, streamConfig);
     }
 
 
@@ -73,13 +82,21 @@ public class KinesisTest {
     }
 
 
-    // TODO March 27, 2019: This test runs very slowly. Need to investigate
-    // why or at least mark it with a category of slow tests.
-    // TODO April 1, 2019: The peformance issue appears to be caused by calling
-    // the init() method.
+    // TODO April 2, 2019: This test runs very slowly. The performance issue
+    // appears to be caused by creating a real instance of a
+    // com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker in the
+    // init() method.
+    //
+    // Eventually, this test should be added to a "slow" category and run
+    // less frequently. However, for now, inject a mock Worker into the instance
+    // of the extension to reduce test execution time for this test from ~204
+    // seconds to a few milliseconds.
     @Test
     public void shouldCallInitWithAwsCredentials() {
-        Kinesis extensionSpy = spy(new Kinesis(gateway, streamConfig));
+        // Inject a mock worker to reduce execution time
+        extension.worker = worker;
+
+        Kinesis extensionSpy = spy(extension);
 
         willCallRealMethod().given(extensionSpy).init();
 
@@ -129,14 +146,9 @@ public class KinesisTest {
     }
 
 
-    // TODO March 27, 2019: This test runs very slowly. Need to investigate
-    // why or at least mark it with a category of slow tests.
-    // TODO April 1, 2019: The peformance issue appears to be caused by calling
-    // the init() method.
     @Test
     public void shouldCallStop() {
-        Kinesis extension = new Kinesis(gateway, streamConfig);
-        extension.init();
+        extension.worker = worker;
 
         Kinesis extensionSpy = spy(extension);
 
@@ -145,5 +157,61 @@ public class KinesisTest {
         extensionSpy.stop();
 
         then(extensionSpy).should().stop();
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithNullBody() {
+        testProcessBody(null);
+    }
+
+
+    private void testProcessBody(String body) {
+        Kinesis extension = new Kinesis(gateway, streamConfig);
+        extension.worker = worker;
+
+        // Call the "real" init() method, but use the mock worker injected above.
+        extension.init();
+
+        Kinesis extensionSpy = spy(extension);
+
+        willCallRealMethod().given(extensionSpy).processBody(body);
+
+        extensionSpy.processBody(body);
+
+        then(extensionSpy).should().processBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithEmptyBody() {
+        testProcessBody("");
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithEmptyObjectBody() {
+        testProcessBody("{}");
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariablesEventsEmptyPath() {
+        String body = "{ \"path\": \"\" }";
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariablesEventsNonEmptyPath() {
+        String body = "{ \"path\": \"foobar\" }";
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithVariablesEventsDevicesPath() {
+        String body = "{ \"path\": \"Devices\" }";
+        testProcessBody(body);
     }
 }
