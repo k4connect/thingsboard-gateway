@@ -67,6 +67,9 @@ public class KinesisTest {
     private static final String VARIABLES_MESSAGE_PATH = makePath(DEVICES_PATH, VARIABLES_PATH);
     private static final String EVENTS_MESSAGE_PATH = makePath(DEVICES_PATH, EVENTS_PATH);
 
+    private static final String EXPECTED_OID = "1.3.6.1.4.1.32473.1.2";
+    private static final String EXPECTED_TYPE = "disconnect";
+
 
     @Mock
     private GatewayService gateway;
@@ -314,4 +317,51 @@ public class KinesisTest {
 
         testProcessBody(body);
     }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersDisconnectNullOidNullType() {
+        String body = makeDisconnectBody(null, null);
+
+        testProcessBody(body);
+    }
+
+
+    private String makeDisconnectBody(String oid, String type) {
+        return  "{ \"oid\": \"" + oid + "\", \"type\": \"" + type + "\"  }";
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersDisconnectExpectedOidNullType() {
+        String body = makeDisconnectBody(EXPECTED_OID, null);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersDisconnectExpectedOidExpectedType() {
+        String body = makeDisconnectBody(EXPECTED_OID, EXPECTED_TYPE);
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersDisconnectExpectedOidInvalidType() {
+        String body = makeDisconnectBody(EXPECTED_OID, "foobar");
+
+        testProcessBody(body);
+    }
+
+
+    @Test
+    public void shouldCallProcessBodyWithServersDisconnectInvalidOidNullType() {
+        String body = makeDisconnectBody("foobar", null);
+
+        testProcessBody(body);
+    }
+
+
 }
