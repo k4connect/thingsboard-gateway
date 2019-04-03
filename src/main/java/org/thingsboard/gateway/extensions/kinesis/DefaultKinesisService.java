@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisConfiguration;
+import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
 import org.thingsboard.gateway.util.ConfigurationTools;
 
@@ -13,6 +14,8 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 
 /**
  * Created by ashvayka on 15.05.17.
@@ -29,9 +32,11 @@ public class DefaultKinesisService {
 
     private List<Kinesis> brokers;
 
+
     @PostConstruct
     public void init() throws Exception {
         log.info("Initializing Kinesis service!");
+
         KinesisConfiguration configuration;
         try {
             configuration = ConfigurationTools.readFileConfiguration(configurationFile, KinesisConfiguration.class);
@@ -41,15 +46,27 @@ public class DefaultKinesisService {
         }
 
         try {
+            Stream<KinesisStreamConfiguration> configurationStream =
+                configuration.getKinesisStreamConfigurations().stream();
 
-            brokers = configuration.getKinesisStreamConfigurations().stream().map(c -> new Kinesis(service, c)).collect(Collectors.toList());
+            brokers =
+                configurationStream.map(config ->
+                    buildKinesis(service, config)).collect(Collectors.toList()
+                );
+
             brokers.forEach(Kinesis::init);
-       
+
         } catch (Exception e) {
             log.error("Kinesis service initialization failed!", e);
             throw e;
         }
     }
+
+
+    protected Kinesis buildKinesis(GatewayService service, KinesisStreamConfiguration config) {
+        return new Kinesis(service, config);
+    }
+
 
     @PreDestroy
     public void preDestroy() {
@@ -57,5 +74,4 @@ public class DefaultKinesisService {
             brokers.forEach(Kinesis::stop);
         }
     }
-
 }
