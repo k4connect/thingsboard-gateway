@@ -30,7 +30,7 @@ public class DefaultKinesisService {
     @Value("${kinesis.configuration}")
     private String configurationFile;
 
-    private List<Kinesis> brokers;
+    private List<Kinesis> kinesisStreams;
 
 
     @PostConstruct
@@ -49,12 +49,12 @@ public class DefaultKinesisService {
             Stream<KinesisStreamConfiguration> configurationStream =
                 configuration.getKinesisStreamConfigurations().stream();
 
-            brokers =
+            kinesisStreams =
                 configurationStream.map(config ->
                     buildKinesis(service, config)).collect(Collectors.toList()
                 );
 
-            brokers.forEach(Kinesis::init);
+            kinesisStreams.forEach(Kinesis::init);
 
         } catch (Exception e) {
             log.error("Kinesis service initialization failed!", e);
@@ -70,8 +70,8 @@ public class DefaultKinesisService {
 
     @PreDestroy
     public void preDestroy() {
-        if (brokers != null) {
-            brokers.forEach(Kinesis::stop);
+        if (kinesisStreams != null) {
+            kinesisStreams.forEach(Kinesis::stop);
         }
     }
 }
