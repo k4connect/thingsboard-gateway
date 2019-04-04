@@ -264,6 +264,7 @@
                         </properties>
                         <excludes>
                             <exclude>run.sh</exclude>
+                            <exclude>runTests.sh</exclude>
                             <exclude>**/.env</exclude>
                             <exclude>**/README</exclude>
                             <exclude>**/LICENSE</exclude>
