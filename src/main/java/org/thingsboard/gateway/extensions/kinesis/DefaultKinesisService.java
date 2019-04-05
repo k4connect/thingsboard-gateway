@@ -37,7 +37,15 @@ public class DefaultKinesisService {
     public void init() throws Exception {
         log.info("Initializing Kinesis service!");
 
+        KinesisConfiguration configuration = configureService();
+
+        initializeService(configuration);
+    }
+
+
+    protected KinesisConfiguration configureService() throws Exception {
         KinesisConfiguration configuration;
+
         try {
             configuration = ConfigurationTools.readFileConfiguration(configurationFile, KinesisConfiguration.class);
         } catch (Exception e) {
@@ -45,6 +53,11 @@ public class DefaultKinesisService {
             throw e;
         }
 
+        return configuration;
+    }
+
+
+    protected void initializeService(KinesisConfiguration configuration) {
         try {
             Stream<KinesisStreamConfiguration> configurationStream =
                 configuration.getKinesisStreamConfigurations().stream();

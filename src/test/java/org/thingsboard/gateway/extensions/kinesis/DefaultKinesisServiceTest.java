@@ -39,6 +39,9 @@ public class DefaultKinesisServiceTest {
 
     private static final String CONFIG_FILE_FIELD = "configurationFile";
 
+    private static final String SERVICE_INIT_ERROR_MESSAGE =
+        "ERROR: Exception occurred when trying to initialize DefaultKinesisService.";
+
 
     @Mock
     private GatewayService gateway;
@@ -94,9 +97,14 @@ public class DefaultKinesisServiceTest {
 
 
     private void setConfigurationFile(DefaultKinesisService service) {
+        setConfigurationFile(service, CONFIG_FILE_NAME);
+    }
+
+
+    private void setConfigurationFile(DefaultKinesisService service, String fileName) {
         // Inject the configuration file name into the service for use in unit
         // testing. This avoids having to use the SpringRunner and @SpringBootTest.
-        setField(service, CONFIG_FILE_FIELD, CONFIG_FILE_NAME);
+        setField(service, CONFIG_FILE_FIELD, fileName);
     }
 
 
@@ -120,16 +128,60 @@ public class DefaultKinesisServiceTest {
 
 
     private void failOnInitException(Exception e) {
+        processInitException(e);
+
+        fail(SERVICE_INIT_ERROR_MESSAGE + ";\t" + e);
+    }
+
+
+    private void processInitException(Exception e) {
+        verifyInitException(e);
+        displayInitException(e);
+    }
+
+
+    private void verifyInitException(Exception e) {
         assertNotNull(e);
         assertNotNull(e.toString());
+    }
 
-        String errorMessage =
-            "ERROR: Exception occurred when trying to initialize DefaultKinesisService.";
 
-        System.out.println(errorMessage);
+    private void displayInitException(Exception e) {
+        System.out.println(SERVICE_INIT_ERROR_MESSAGE);
         System.out.println(e);
+    }
 
-        fail(errorMessage + ";\t" + e);
+
+    @Test
+    public void shouldThrowExceptionWhenConfigureService() {
+        DefaultKinesisService serviceSpy = spy(new DefaultKinesisService());
+        setConfigurationFile(serviceSpy, null);
+
+        // Inject a Kinesis object with a mock Worker to avoid performance
+        // issues when running unit tests
+        when(serviceSpy.buildKinesis(anyObject(), anyObject())).thenReturn(extension);
+
+        try {
+            serviceSpy.init();
+
+            then(serviceSpy).should().init();
+        } catch (Exception e) {
+            processInitException(e);
+        }
+    }
+
+
+    @Test
+    public void shouldThrowExceptionWhenInitializeService() {
+        DefaultKinesisService serviceSpy = spy(new DefaultKinesisService());
+
+        try {
+            serviceSpy.initializeService(null);
+
+            then(serviceSpy).should().initializeService(null);
+        } catch (Exception e) {
+            processInitException(e);
+        }
     }
 
 
