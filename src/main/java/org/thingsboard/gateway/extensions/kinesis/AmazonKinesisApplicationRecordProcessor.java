@@ -8,23 +8,17 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-// import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-
-// import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-
-import com.amazonaws.services.kinesis.model.Record;
-
+import software.amazon.kinesis.exceptions.InvalidStateException;
+import software.amazon.kinesis.exceptions.ShutdownException;
+import software.amazon.kinesis.exceptions.ThrottlingException;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
+import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
  * Processes records and checkpoints progress.
@@ -46,11 +40,13 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
 
     private Kinesis extension;
 
+
     public  AmazonKinesisApplicationRecordProcessor(Kinesis extension)
     {
         super();
         this.extension = extension;
     }
+
 
     /**
      * {@inheritDoc}
@@ -61,14 +57,15 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
         LOG.info("Initializing record processor for shard: " + this.kinesisShardId );
     }
 
+
     /**
      * {@inheritDoc}
      */
     @Override
     public void processRecords(ProcessRecordsInput processRecordsInput) {
 
-        List<Record> records = processRecordsInput.getRecords();
-        IRecordProcessorCheckpointer checkpointer = processRecordsInput.getCheckpointer();
+        List<KinesisClientRecord> records = processRecordsInput.getRecords();
+        RecordProcessorCheckpointer checkpointer = processRecordsInput.getCheckpointer();
 
         LOG.info("Processing " + records.size() + " records from " + kinesisShardId);
 
@@ -82,12 +79,13 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
         }
     }
 
+
     /**
      * Process records performing retries as needed. Skip "poison pill" records.
      *
      * @param records Data records to be processed.
      */
-    private void processRecordsWithRetries(List<Record> records) {
+    private void processRecordsWithRetries(List<KinesisClientRecord> records) {
         for (Record record : records) {
             boolean processedSuccessfully = false;
             for (int i = 0; i < NUM_RETRIES; i++) {
@@ -117,12 +115,13 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
         }
     }
 
+
     /**
      * Process a single record.
      *
      * @param record The record to be processed.
      */
-    private void processSingleRecord(Record record) {
+    private void processSingleRecord(KinesisClientRecord record) {
         String data = null;
         try {
 
@@ -134,24 +133,46 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
         }
     }
 
+
+    /**
+     * {@inheritDoc}
+     */
+// Replaced by shardEnded, but leaving in place for now because some of the
+// Amazon example logic has changed from the K4Connect implementation.
+    // @Override
+    // public void shutdown(ShutdownInput shutdownInput) {
+    //     LOG.info("Shutting down record processor for shard: " + kinesisShardId);
+    //     // Important to checkpoint after reaching end of shard, so we can start processing data from child shards.
+    //     ShutdownReason reason = shutdownInput.getShutdownReason();
+
+    //     if (reason == ShutdownReason.TERMINATE) {
+    //         checkpoint(shutdownInput.getCheckpointer());
+    //     }
+    // }
+
+
     /**
      * {@inheritDoc}
      */
     @Override
-    public void shutdown(ShutdownInput shutdownInput) {
-        LOG.info("Shutting down record processor for shard: " + kinesisShardId);
-        // Important to checkpoint after reaching end of shard, so we can start processing data from child shards.
-        ShutdownReason reason = shutdownInput.getShutdownReason();
+    public void leaseLost(LeaseLostInput leaseLostInput) {
 
-        if (reason == ShutdownReason.TERMINATE) {
-            checkpoint(shutdownInput.getCheckpointer());
-        }
     }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void shardEnded(ShardEndedInput shardEndedInput) {
+        checkpoint(shardEndedInput.checkpointer());
+    }
+
 
     /** Checkpoint with retries.
      * @param checkpointer
      */
-    private void checkpoint(IRecordProcessorCheckpointer checkpointer) {
+    private void checkpoint(RecordProcessorCheckpointer checkpointer) {
         LOG.info("Checkpointing shard " + kinesisShardId);
         for (int i = 0; i < NUM_RETRIES; i++) {
             try {
