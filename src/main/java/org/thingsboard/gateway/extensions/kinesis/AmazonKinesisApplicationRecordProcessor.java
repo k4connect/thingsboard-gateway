@@ -11,10 +11,10 @@ import org.apache.commons.logging.LogFactory;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+// import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+// import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 
@@ -22,11 +22,14 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 
 import com.amazonaws.services.kinesis.model.Record;
 
+import software.amazon.kinesis.lifecycle.events.InitializationInput;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 /**
  * Processes records and checkpoints progress.
  */
-public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor {
+public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProcessor {
 
     private static final Log LOG = LogFactory.getLog(AmazonKinesisApplicationRecordProcessor.class);
     private String kinesisShardId;
