@@ -1,11 +1,14 @@
 package org.thingsboard.gateway.extensions.kinesis;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+
+import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
+
+
 /**
  * Used to create new record processors.
  */
-public class AmazonKinesisApplicationRecordProcessorFactory implements IRecordProcessorFactory {
+public class AmazonKinesisApplicationRecordProcessorFactory implements ShardRecordProcessorFactory {
 
 
 	private Kinesis extension;
@@ -14,12 +17,15 @@ public class AmazonKinesisApplicationRecordProcessorFactory implements IRecordPr
 	{
 		super();
 		this.extension = extension;
-	}
+    }
+
+
     /**
      * {@inheritDoc}
      */
     @Override
-    public IRecordProcessor createProcessor() {
+    public ShardRecordProcessor shardRecordProcessor() {
         return new AmazonKinesisApplicationRecordProcessor(extension);
     }
 }
+
