@@ -16,6 +16,7 @@ import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
+import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -53,7 +54,8 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
      */
     @Override
     public void initialize(InitializationInput initializationInput) {
-        this.kinesisShardId = initializationInput.getShardId();
+        this.kinesisShardId = initializationInput.shardId();
+
         LOG.info("Initializing record processor for shard: " + this.kinesisShardId );
     }
 
@@ -63,9 +65,8 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
      */
     @Override
     public void processRecords(ProcessRecordsInput processRecordsInput) {
-
-        List<KinesisClientRecord> records = processRecordsInput.getRecords();
-        RecordProcessorCheckpointer checkpointer = processRecordsInput.getCheckpointer();
+        List<KinesisClientRecord> records = processRecordsInput.records();
+        RecordProcessorCheckpointer checkpointer = processRecordsInput.checkpointer();
 
         LOG.info("Processing " + records.size() + " records from " + kinesisShardId);
 
@@ -86,7 +87,7 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
      * @param records Data records to be processed.
      */
     private void processRecordsWithRetries(List<KinesisClientRecord> records) {
-        for (Record record : records) {
+        for (KinesisClientRecord record : records) {
             boolean processedSuccessfully = false;
             for (int i = 0; i < NUM_RETRIES; i++) {
                 try {
@@ -123,11 +124,10 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
      */
     private void processSingleRecord(KinesisClientRecord record) {
         String data = null;
+
         try {
-
-            data = decoder.decode(record.getData()).toString();
+            data = decoder.decode(record.data()).toString();
             extension.processBody(data);
-
         } catch (CharacterCodingException e) {
             LOG.error("Malformed data: " + data, e);
         }
@@ -156,7 +156,10 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
      */
     @Override
     public void leaseLost(LeaseLostInput leaseLostInput) {
-
+        // TODO: April 9, 2019: Not sure if this needs an impelementation or
+        // not; the examples in the Amazon KCL migration guide don't show an
+        // implementation, but they also don't show implementations for other
+        // methods that we have already implemented.
     }
 
 
@@ -202,5 +205,14 @@ public class AmazonKinesisApplicationRecordProcessor implements ShardRecordProce
                 LOG.debug("Interrupted sleep", e);
             }
         }
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput) {
+        checkpoint(shutdownRequestedInput.checkpointer());
     }
 }

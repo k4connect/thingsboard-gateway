@@ -24,16 +24,6 @@ import java.nio.charset.CharsetEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.model.Record;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,6 +37,20 @@ import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguratio
 import org.thingsboard.gateway.service.gateway.GatewayService;
 
 
+import software.amazon.kinesis.exceptions.InvalidStateException;
+import software.amazon.kinesis.exceptions.ShutdownException;
+import software.amazon.kinesis.exceptions.ThrottlingException;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
+import software.amazon.kinesis.lifecycle.events.InitializationInput;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
+import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
+import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
+
+
 
 @RunWith(MockitoJUnitRunner.class)
 public class AmazonKinesisApplicationRecordProcessorTest {
@@ -57,10 +61,13 @@ public class AmazonKinesisApplicationRecordProcessorTest {
     InitializationInput initializationInput;
 
     @Mock
-    ShutdownInput shutdownInput;
+    ShutdownRequestedInput shutdownRequestedInput;
 
     @Mock
-    IRecordProcessorCheckpointer checkpointer;
+    ShardEndedInput shardEndedInput;
+
+    @Mock
+    RecordProcessorCheckpointer checkpointer;
 
     @Mock
     ProcessRecordsInput processRecordsInput;
@@ -116,59 +123,107 @@ public class AmazonKinesisApplicationRecordProcessorTest {
 
 
     @Test
-    public void shouldShutdownInstance() {
-        processorSpy.shutdown(shutdownInput);
-
-        then(processorSpy).should().shutdown(shutdownInput);
-    }
-
-
-    @Test
-    public void shouldShutdownInstanceWithShutdownReason() {
+    public void shouldCallShutdownRequested() {
         setShutdownStubs();
 
-        processorSpy.shutdown(shutdownInput);
+        processorSpy.shutdownRequested(shutdownRequestedInput);
 
-        then(processorSpy).should().shutdown(shutdownInput);
+        then(processorSpy).should().shutdownRequested(shutdownRequestedInput);
     }
 
 
     private void setShutdownStubs() {
-        given(shutdownInput.getShutdownReason()).willReturn(ShutdownReason.TERMINATE);
-        given(shutdownInput.getCheckpointer()).willReturn(checkpointer);
+        given(shutdownRequestedInput.checkpointer()).willReturn(checkpointer);
+
+        given(shardEndedInput.checkpointer()).willReturn(checkpointer);
     }
 
 
     @Test
-    public void expectShutdownException() throws InvalidStateException, ShutdownException {
+    public void expectShutdownExceptionWhenShutdownRequested()
+        throws InvalidStateException, ShutdownException {
+
         setShutdownStubs();
         willThrow(ShutdownException.class).given(checkpointer).checkpoint();
 
-        processorSpy.shutdown(shutdownInput);
+        processorSpy.shutdownRequested(shutdownRequestedInput);
 
-        then(processorSpy).should().shutdown(shutdownInput);
+        then(processorSpy).should().shutdownRequested(shutdownRequestedInput);
     }
 
 
     @Test
-    public void expectInvalidStateException() throws InvalidStateException, ShutdownException {
+    public void expectInvalidStateExceptionWhenShutdownRequested()
+        throws InvalidStateException, ShutdownException {
+
         setShutdownStubs();
         willThrow(InvalidStateException.class).given(checkpointer).checkpoint();
 
-        processorSpy.shutdown(shutdownInput);
+        processorSpy.shutdownRequested(shutdownRequestedInput);
 
-        then(processorSpy).should().shutdown(shutdownInput);
+        then(processorSpy).should().shutdownRequested(shutdownRequestedInput);
     }
 
 
     @Test
-    public void expectThrottlingException() throws InvalidStateException, ShutdownException {
+    public void expectThrottlingExceptionWhenShutdownRequested()
+        throws InvalidStateException, ShutdownException {
+
         setShutdownStubs();
         willThrow(ThrottlingException.class).given(checkpointer).checkpoint();
 
-        processorSpy.shutdown(shutdownInput);
+        processorSpy.shutdownRequested(shutdownRequestedInput);
 
-        then(processorSpy).should().shutdown(shutdownInput);
+        then(processorSpy).should().shutdownRequested(shutdownRequestedInput);
+    }
+
+
+    @Test
+    public void shouldCallShardEnded() {
+        setShutdownStubs();
+
+        processorSpy.shardEnded(shardEndedInput);
+
+        then(processorSpy).should().shardEnded(shardEndedInput);
+    }
+
+
+    @Test
+    public void expectShutdownExceptionWhenShardEnded()
+        throws InvalidStateException, ShutdownException {
+
+        setShutdownStubs();
+        willThrow(ShutdownException.class).given(checkpointer).checkpoint();
+
+        processorSpy.shardEnded(shardEndedInput);
+
+        then(processorSpy).should().shardEnded(shardEndedInput);
+    }
+
+
+    @Test
+    public void expectInvalidStateExceptionWhenShardEnded()
+        throws InvalidStateException, ShutdownException {
+
+        setShutdownStubs();
+        willThrow(InvalidStateException.class).given(checkpointer).checkpoint();
+
+        processorSpy.shardEnded(shardEndedInput);
+
+        then(processorSpy).should().shardEnded(shardEndedInput);
+    }
+
+
+    @Test
+    public void expectThrottlingExceptionWhenShardEnded()
+        throws InvalidStateException, ShutdownException {
+
+        setShutdownStubs();
+        willThrow(ThrottlingException.class).given(checkpointer).checkpoint();
+
+        processorSpy.shardEnded(shardEndedInput);
+
+        then(processorSpy).should().shardEnded(shardEndedInput);
     }
 
 
@@ -177,7 +232,7 @@ public class AmazonKinesisApplicationRecordProcessorTest {
             throws CharacterCodingException {
 
         String someTestData = "foobar";
-        List<Record> records = makeRecordList(someTestData, UTF_8);
+        List<KinesisClientRecord> records = makeRecordList(someTestData, UTF_8);
         setupProcessRecordsInputStubs(records);
 
         processorSpy.processRecords(processRecordsInput);
@@ -186,24 +241,25 @@ public class AmazonKinesisApplicationRecordProcessorTest {
     }
 
 
-    private List<Record> makeRecordList(String someTestData, Charset charset)
+    private List<KinesisClientRecord> makeRecordList(String someTestData, Charset charset)
             throws CharacterCodingException {
 
         CharsetEncoder encoder = Charset.forName(charset.name()).newEncoder();
         CharBuffer charBuffer = CharBuffer.wrap(someTestData.toCharArray());
         ByteBuffer buffer = encoder.encode(charBuffer);
 
-        Record dataRecord = new Record().withData(buffer);
-        List<Record> records = new ArrayList();
+        KinesisClientRecord dataRecord = KinesisClientRecord.builder().data(buffer).build();
+        List<KinesisClientRecord> records = new ArrayList();
         records.add(dataRecord);
 
         return records;
     }
 
 
-    private void setupProcessRecordsInputStubs(List<Record> records) {
-        given(processRecordsInput.getRecords()).willReturn(records);
-        given(processRecordsInput.getCheckpointer()).willReturn(checkpointer);
+    private void setupProcessRecordsInputStubs(List<KinesisClientRecord> records) {
+        given(processRecordsInput.records()).willReturn(records);
+        given(processRecordsInput.checkpointer()).willReturn(checkpointer);
+
         willCallRealMethod().given(processorSpy).processRecords(processRecordsInput);
     }
 
@@ -218,7 +274,8 @@ public class AmazonKinesisApplicationRecordProcessorTest {
         // AmazonKinesisApplicationRecordProcessor.processRecords();
         Charset charsetToCauseException = ISO_8859_1;
 
-        List<Record> records = makeRecordList(someTestData, charsetToCauseException);
+        List<KinesisClientRecord> records =
+            makeRecordList(someTestData, charsetToCauseException);
         setupProcessRecordsInputStubs(records);
 
         processorSpy.processRecords(processRecordsInput);
