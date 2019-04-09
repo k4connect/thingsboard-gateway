@@ -7,7 +7,6 @@ import static org.junit.Assert.assertNotNull;
 
 import static org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfigurationTest.TEST_STREAM_NAME;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -22,6 +21,7 @@ import org.thingsboard.gateway.extensions.kinesis.Kinesis;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
 
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 
 @RunWith(MockitoJUnitRunner.class)
@@ -58,10 +58,10 @@ public class AmazonKinesisApplicationRecordProcessorFactoryTest {
         AmazonKinesisApplicationRecordProcessorFactory processorFactory =
             new AmazonKinesisApplicationRecordProcessorFactory(extension);
 
-        IRecordProcessor processor = processorFactory.createProcessor();
+        ShardRecordProcessor processor = processorFactory.shardRecordProcessor();
 
         assertNotNull(processor);
-        assertThat(processor, isA(IRecordProcessor.class));
+        assertThat(processor, isA(ShardRecordProcessor.class));
     }
 
 
@@ -71,7 +71,7 @@ public class AmazonKinesisApplicationRecordProcessorFactoryTest {
             new AmazonKinesisApplicationRecordProcessorFactory(extension);
 
         AmazonKinesisApplicationRecordProcessor amazonProcessor =
-            (AmazonKinesisApplicationRecordProcessor) processorFactory.createProcessor();
+            (AmazonKinesisApplicationRecordProcessor) processorFactory.shardRecordProcessor();
 
         assertNotNull(amazonProcessor);
         assertThat(amazonProcessor, isA(AmazonKinesisApplicationRecordProcessor.class));

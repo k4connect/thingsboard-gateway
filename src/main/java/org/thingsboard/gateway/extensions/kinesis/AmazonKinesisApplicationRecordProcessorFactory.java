@@ -8,7 +8,8 @@ import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 /**
  * Used to create new record processors.
  */
-public class AmazonKinesisApplicationRecordProcessorFactory implements ShardRecordProcessorFactory {
+public class AmazonKinesisApplicationRecordProcessorFactory
+    implements ShardRecordProcessorFactory {
 
 
 	private Kinesis extension;
