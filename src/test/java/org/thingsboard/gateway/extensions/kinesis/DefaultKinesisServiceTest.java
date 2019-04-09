@@ -18,8 +18,6 @@ import static org.springframework.test.util.ReflectionTestUtils.setField;
 
 import static org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfigurationTest.TEST_STREAM_NAME;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,6 +28,8 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.thingsboard.gateway.extensions.kinesis.Kinesis;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
+
+import software.amazon.kinesis.coordinator.Scheduler;
 
 
 
@@ -47,7 +47,7 @@ public class DefaultKinesisServiceTest {
     private GatewayService gateway;
 
     @Mock
-    private Worker mockWorker;
+    private Scheduler mockScheduler;
 
     private KinesisStreamConfiguration streamConfig = null;
 
@@ -60,7 +60,7 @@ public class DefaultKinesisServiceTest {
         streamConfig.setStream(TEST_STREAM_NAME);
 
         extension = new Kinesis(gateway, streamConfig);
-        extension.worker = mockWorker;
+        extension.scheduler = mockScheduler;
     }
 
 
@@ -113,7 +113,7 @@ public class DefaultKinesisServiceTest {
         DefaultKinesisService serviceSpy = spy(new DefaultKinesisService());
         setConfigurationFile(serviceSpy);
 
-        // Inject a Kinesis object with a mock Worker to avoid performance
+        // Inject a Kinesis object with a mock Scheduler to avoid performance
         // issues when running unit tests
         when(serviceSpy.buildKinesis(anyObject(), anyObject())).thenReturn(extension);
 
@@ -157,7 +157,7 @@ public class DefaultKinesisServiceTest {
         DefaultKinesisService serviceSpy = spy(new DefaultKinesisService());
         setConfigurationFile(serviceSpy, null);
 
-        // Inject a Kinesis object with a mock Worker to avoid performance
+        // Inject a Kinesis object with a mock Scheduler to avoid performance
         // issues when running unit tests
         when(serviceSpy.buildKinesis(anyObject(), anyObject())).thenReturn(extension);
 
@@ -203,7 +203,7 @@ public class DefaultKinesisServiceTest {
         DefaultKinesisService serviceSpy = spy(new DefaultKinesisService());
         setConfigurationFile(serviceSpy);
 
-        // Inject a Kinesis object with a mock Worker to avoid performance
+        // Inject a Kinesis object with a mock Scheduler to avoid performance
         // issues when running unit tests
         when(serviceSpy.buildKinesis(anyObject(), anyObject())).thenReturn(extension);
 
