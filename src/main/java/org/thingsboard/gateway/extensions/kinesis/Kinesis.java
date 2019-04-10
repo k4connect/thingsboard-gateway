@@ -1,5 +1,8 @@
 package org.thingsboard.gateway.extensions.kinesis;
 
+import static software.amazon.awssdk.regions.Region.US_EAST_1;
+import static software.amazon.kinesis.common.InitialPositionInStream.LATEST;
+
 import lombok.extern.slf4j.Slf4j;
 
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
@@ -13,20 +16,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 
 import java.net.InetAddress;
 import java.util.UUID;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.kinesis.AmazonKinesis;
-import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -35,16 +24,22 @@ import java.util.concurrent.TimeUnit;
 
 import org.thingsboard.server.common.data.kv.*;
 
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.KinesisClientUtil;
+import software.amazon.kinesis.coordinator.Scheduler;
+
+
 @Slf4j
 public class Kinesis {
     public static final String EVENTS_STARTED_PATH = "/events/started";
-
-    private GatewayService gateway;
-    private KinesisStreamConfiguration configuration;
-
-    // Use default (package) scope so unit tests can insert mock object
-    Worker worker = null;
-
 
     private static final int OPERATION_TIMEOUT_IN_SEC = 10;
 
@@ -52,9 +47,22 @@ public class Kinesis {
 
     // Initial position in the stream when the application starts up for the first time.
     // Position can be one of LATEST (most recent data) or TRIM_HORIZON (oldest available data)
-    private static final InitialPositionInStream APPLICATION_INITIAL_POSITION_IN_STREAM = InitialPositionInStream.LATEST;
+    private static final InitialPositionInStream APPLICATION_INITIAL_POSITION_IN_STREAM = LATEST;
 
-    private static AWSCredentialsProvider credentialsProvider;
+
+    private GatewayService gateway;
+    private KinesisStreamConfiguration configuration;
+
+    private KinesisAsyncClient kinesisClient;
+    private DynamoDbAsyncClient dynamoClient;
+    private CloudWatchAsyncClient cloudWatchClient;
+
+    // Use default (package) scope so unit tests can insert mock object
+    Scheduler scheduler = null;
+
+    protected Region region = US_EAST_1;
+
+    private static AwsCredentialsProvider credentialsProvider;
 
 
     public Kinesis(GatewayService service, KinesisStreamConfiguration c) {
@@ -73,13 +81,17 @@ public class Kinesis {
          * credential profile by reading from the credentials file located at
          * (~/.aws/credentials).
          */
-        credentialsProvider = new ProfileCredentialsProvider();
+        credentialsProvider = ProfileCredentialsProvider.create();
+
         try {
-            credentialsProvider.getCredentials();
+            credentialsProvider.resolveCredentials();
         } catch (Exception e) {
-            throw new AmazonClientException("Cannot load the credentials from the credential profiles file. "
-                    + "Please make sure that your credentials file is at the correct "
-                    + "location (~/.aws/credentials), and is in valid format.", e);
+            String message =
+                "Cannot load the credentials from the credential profiles file. " +
+                "Please make sure that your credentials file is at the correct " +
+                "location (~/.aws/credentials), and is in valid format.";
+
+            throw SdkException.builder().message(message).cause(e).build();
         }
 
         String workerId;
@@ -87,34 +99,95 @@ public class Kinesis {
         try {
             workerId = InetAddress.getLocalHost().getCanonicalHostName() + ":" + UUID.randomUUID();
         } catch (Exception e) {
-            throw new AmazonClientException("Cannot create workerId");
+            throw SdkException.builder().message("Cannot create workerId").build();
         }
 
-
-        KinesisClientLibConfiguration kinesisClientLibConfiguration =
-                new KinesisClientLibConfiguration(APPLICATION_NAME,
-                        configuration.getStream(),
-                        credentialsProvider,
-                        workerId);
-        kinesisClientLibConfiguration.withInitialPositionInStream(APPLICATION_INITIAL_POSITION_IN_STREAM);
-
-        IRecordProcessorFactory recordProcessorFactory = new AmazonKinesisApplicationRecordProcessorFactory(this);
-
-        if (worker == null) {
-            worker = new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(kinesisClientLibConfiguration).build();
-        }
+        initializeClients();
+        // initializeWorker(workerId);
+        initializeScheduler();
 
         log.info("Running {} to process stream {} as worker {}...",
                 APPLICATION_NAME,
                 configuration.getStream(),
                 workerId);
 
-        worker.run();
+        // worker.run();
+        runScheduler();
     }
 
 
+    // // Amazon KCL v1.8.5 way of doing this
+    // private void initializeWorker(String workerId) {
+    //     KinesisClientLibConfiguration kinesisClientLibConfiguration =
+    //             new KinesisClientLibConfiguration(APPLICATION_NAME,
+    //                     configuration.getStream(),
+    //                     credentialsProvider,
+    //                     workerId);
+    //     kinesisClientLibConfiguration.withInitialPositionInStream(APPLICATION_INITIAL_POSITION_IN_STREAM);
+
+    //     IRecordProcessorFactory recordProcessorFactory =
+    //         new AmazonKinesisApplicationRecordProcessorFactory(this);
+
+    //     if (worker == null) {
+    //         worker = new Worker.Builder()
+    //             .recordProcessorFactory(recordProcessorFactory)
+    //             .config(kinesisClientLibConfiguration)
+    //             .build();
+    //     }
+    // }
+
+
+    protected void initializeClients() {
+        kinesisClient =
+            KinesisClientUtil.createKinesisAsyncClient(KinesisAsyncClient.builder().region(region));
+        dynamoClient = DynamoDbAsyncClient.builder().region(region).build();
+        cloudWatchClient = CloudWatchAsyncClient.builder().region(region).build();
+    }
+
+
+    protected void initializeScheduler() {
+        ConfigsBuilder configsBuilder = makeConfigsBuilder();
+
+        makeScheduler(configsBuilder);
+    }
+
+
+    protected ConfigsBuilder makeConfigsBuilder() {
+        AmazonKinesisApplicationRecordProcessorFactory recordProcessorFactory =
+            new AmazonKinesisApplicationRecordProcessorFactory(this);
+
+        ConfigsBuilder builder =
+            new ConfigsBuilder(configuration.getStream(), APPLICATION_NAME,
+                    kinesisClient, dynamoClient, cloudWatchClient,
+                    UUID.randomUUID().toString(), recordProcessorFactory);
+
+        return builder;
+    }
+
+
+    protected void makeScheduler(ConfigsBuilder configsBuilder) {
+        if (scheduler == null) {
+            scheduler = new Scheduler(
+                configsBuilder.checkpointConfig(),
+                configsBuilder.coordinatorConfig(),
+                configsBuilder.leaseManagementConfig(),
+                configsBuilder.lifecycleConfig(),
+                configsBuilder.metricsConfig(),
+                configsBuilder.processorConfig(),
+                configsBuilder.retrievalConfig()
+            );
+        }
+    }
+
+
+    // TODO: April 8, 2019: This method still needs to be implemented!
+    protected void runScheduler() {
+
+    }
+
+    // TODO: April 8, 2019: This method needs to be examined for changes
     public void stop() {
-        worker.shutdown();
+        // worker.shutdown();
     }
 
 
@@ -155,7 +228,7 @@ public class Kinesis {
         List<TsKvEntry> telemetry = new ArrayList<>();
 
         if (isControllerDisconnectMessage(message)) {
-            //controller disconnect
+            // controller disconnect
             BooleanDataEntry data = new BooleanDataEntry("online", false);
             telemetry.add(new BasicTsKvEntry(message.timestamp, data));
 
@@ -184,14 +257,13 @@ public class Kinesis {
 
         // skip anything without a path, and everything not in devices
         if (isDeviceMessage(message)) {
-            if (message.path.contains("variables")) {
+            if (isVariablesMessage(message)) {
                 String variable = message.path.substring(message.path.indexOf("/variables/") + 11);
                 String device = message.analyticsId + "/" + message.path.replace("/variables/" + variable, "");
 
                 future = postTelemetry(device, variable, message.value, message.timestamp);
 
-            } else if (message.path.contains("events")) {
-
+            } else if (isEventsMessage(message)) {
                 if (isValidStartedEvent(message)) {
                     String device =
                         message.analyticsId + "/" + message.path.replace(EVENTS_STARTED_PATH, "");
@@ -211,6 +283,16 @@ public class Kinesis {
         return (message.path != null &&
                 !message.path.isEmpty() &&
                 message.path.indexOf("Devices") == 0);
+    }
+
+
+    private boolean isVariablesMessage(KinesisMessage message) {
+        return message.path.contains("variables");
+    }
+
+
+    private boolean isEventsMessage(KinesisMessage message) {
+        return message.path.contains("events");
     }
 
 

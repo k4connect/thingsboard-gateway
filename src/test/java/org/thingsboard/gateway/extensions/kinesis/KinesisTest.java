@@ -20,9 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.Security;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,6 +30,9 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.thingsboard.gateway.extensions.kinesis.Kinesis;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
+
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.kinesis.coordinator.Scheduler;
 
 
 
@@ -75,7 +75,7 @@ public class KinesisTest {
     private GatewayService gateway;
 
     @Mock
-    private Worker worker;
+    private Scheduler scheduler;
 
     private KinesisStreamConfiguration streamConfig = null;
     private Kinesis extension = null;
@@ -111,13 +111,13 @@ public class KinesisTest {
     // init() method.
     //
     // Eventually, this test should be added to a "slow" category and run
-    // less frequently. However, for now, inject a mock Worker into the instance
+    // less frequently. However, for now, inject a mock Scheduler into the instance
     // of the extension to reduce test execution time for this test from ~204
     // seconds to a few milliseconds.
     @Test
     public void shouldCallInitWithAwsCredentials() {
-        // Inject a mock worker to reduce execution time
-        extension.worker = worker;
+        // Inject a mock scheduler to reduce execution time
+        extension.scheduler = scheduler;
 
         Kinesis extensionSpy = spy(extension);
 
@@ -143,7 +143,7 @@ public class KinesisTest {
             extensionSpy.init();
         } catch (Exception e) {
             assertNotNull(e);
-            assertThat(e, instanceOf(AmazonClientException.class));
+            assertThat(e, instanceOf(SdkException.class));
             assertNotNull(e.toString());
         } finally {
             // Restore the name of the AWS credentials file to its original
@@ -171,7 +171,7 @@ public class KinesisTest {
 
     @Test
     public void shouldCallStop() {
-        extension.worker = worker;
+        extension.scheduler = scheduler;
 
         Kinesis extensionSpy = spy(extension);
 
@@ -191,9 +191,9 @@ public class KinesisTest {
 
     private void testProcessBody(String body) {
         Kinesis extension = new Kinesis(gateway, streamConfig);
-        extension.worker = worker;
+        extension.scheduler = scheduler;
 
-        // Call the "real" init() method, but use the mock worker injected above.
+        // Call the "real" init() method, but use the mock scheduler injected above.
         extension.init();
 
         Kinesis extensionSpy = spy(extension);
