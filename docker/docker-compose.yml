@@ -18,7 +18,7 @@ version: '2'
 
 services:
   tb-gateway:
-    image: "thingsboard/gateway:1.2.1"
+    image: "thingsboard/gateway:2.2.1"
     environment:
       - GATEWAY_ACCESS_TOKEN=${GATEWAY_ACCESS_TOKEN}
       - GATEWAY_HOST=${GATEWAY_HOST}
