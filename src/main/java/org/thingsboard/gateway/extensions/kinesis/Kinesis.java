@@ -117,7 +117,7 @@ public class Kinesis {
     }
 
     //needs to be called from inside KCL
-    public void processBody(String body) {
+    public ArrayList<MqttDeliveryFuture> processBody(String body) {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -135,18 +135,26 @@ public class Kinesis {
             return; 
         }
         
-        try {
+        ArrayList<MqttDeliveryFuture> futures = new ArrayList<MqttDeliveryFuture>();
+
+        try {    
             MqttDeliveryFuture future1 = parseVariablesEvents(message);
             MqttDeliveryFuture future2 = parseController(message);
 
-            waitWithTimeout(future1);
+            futures.add(future1);
             if ( future2 != null ) {
-                waitWithTimeout(future2);
+                futures.add(future2);
             }
+
+            // waitWithTimeout(future1);
+            // if ( future2 != null ) {
+            //     waitWithTimeout(future2);
+            // }
         } catch (Exception e) {
             log.error("Failed to send. Body: {} Exception: {}", body, e);
         }
 
+        return futures;
     }
 
 

@@ -85,6 +85,8 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
      * @param records Data records to be processed.
      */
     private void processRecordsWithRetries(List<Record> records) {
+        LinkedList<MqttDeliveryFuture> futures = new LinkedList<MqttDeliveryFuture>();
+
         for (Record record : records) {
             boolean processedSuccessfully = false;
             for (int i = 0; i < NUM_RETRIES; i++) {
@@ -92,7 +94,11 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
                     //
                     // Logic to process record goes here.
                     //
-                    processSingleRecord(record);
+                    futures.addAll(processSingleRecord(record));
+
+                    while ( futures.size() > MAX_FUTURES ) {
+                        futures.pop().get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                    }
 
                     processedSuccessfully = true;
                     break;
@@ -111,6 +117,10 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
             if (!processedSuccessfully) {
                 LOG.error("Couldn't process record " + record + ". Skipping the record.");
             }
+        }
+
+        for ( MqttDeliveryFuture mqttFuture : futures ) {
+            mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
         }
     }
 
