@@ -22,6 +22,10 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 
 import com.amazonaws.services.kinesis.model.Record;
 
+import java.util.concurrent.TimeUnit;
+import java.util.LinkedList;
+import java.util.concurrent.Future;
+
 
 /**
  * Processes records and checkpoints progress.
@@ -42,6 +46,10 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
     private final CharsetDecoder decoder = Charset.forName("UTF-8").newDecoder();
 
     private Kinesis extension;
+
+
+    private static final int OPERATION_TIMEOUT_IN_SEC = 10;
+    private static final int MAX_FUTURES = 5;
 
     public  AmazonKinesisApplicationRecordProcessor(Kinesis extension)
     {
@@ -79,13 +87,25 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
         }
     }
 
+    public class RecordFuture {
+
+
+        public RecordFuture(ArrayList<Future> futures, Record record) {
+            this.futures = futures;
+            this.record = record;
+        }
+
+        public ArrayList<Future> futures;
+        public Record record;
+    }
+
     /**
      * Process records performing retries as needed. Skip "poison pill" records.
      *
      * @param records Data records to be processed.
      */
     private void processRecordsWithRetries(List<Record> records) {
-        LinkedList<MqttDeliveryFuture> futures = new LinkedList<MqttDeliveryFuture>();
+        LinkedList<RecordFuture> futureRecords = new LinkedList<RecordFuture>();
 
         for (Record record : records) {
             boolean processedSuccessfully = false;
@@ -94,10 +114,21 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
                     //
                     // Logic to process record goes here.
                     //
-                    futures.addAll(processSingleRecord(record));
+                    // futures.addAll(processSingleRecord(record));
+                    futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
 
-                    while ( futures.size() > MAX_FUTURES ) {
-                        futures.pop().get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                    while ( futureRecords.size() > MAX_FUTURES ) {
+
+                        RecordFuture recordFuture = futureRecords.pop();
+                        for(int j = 0; j < recordFuture.size(); j++) {
+
+                            try{
+                                recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                            } catch(Throwable t) {
+                                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
+                            }
+                            
+                        }
                     }
 
                     processedSuccessfully = true;
@@ -119,8 +150,12 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
             }
         }
 
-        for ( MqttDeliveryFuture mqttFuture : futures ) {
-            mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
+        for ( Future mqttFuture : futures ) {
+            try{
+                mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
+            } catch(Exception e) {
+                LOG.debug("Bad Future ", e);
+            }
         }
     }
 
