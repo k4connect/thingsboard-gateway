@@ -97,6 +97,7 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
 
         public ArrayList<Future> futures;
         public Record record;
+        public int retryCount = 0;
     }
 
     /**
@@ -108,54 +109,87 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
         LinkedList<RecordFuture> futureRecords = new LinkedList<RecordFuture>();
 
         for (Record record : records) {
+
             boolean processedSuccessfully = false;
-            for (int i = 0; i < NUM_RETRIES; i++) {
-                try {
-                    //
-                    // Logic to process record goes here.
-                    //
-                    // futures.addAll(processSingleRecord(record));
-                    futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
 
-                    while ( futureRecords.size() > MAX_FUTURES ) {
 
-                        RecordFuture recordFuture = futureRecords.pop();
-                        for(int j = 0; j < recordFuture.size(); j++) {
+            try {
+                //
+                // Logic to process record goes here.
+                //
+                // futures.addAll(processSingleRecord(record));
+                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
 
-                            try{
-                                recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
-                            } catch(Throwable t) {
-                                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
-                            }
+                while ( futureRecords.size() > MAX_FUTURES ) {
+
+                    RecordFuture recordFuture = futureRecords.pop();
+                    for(int j = 0; j < recordFuture.size(); j++) {
+
+                        try{
+                            recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                        } catch(Throwable t) {
                             
+
+                            if(recordFuture.retryCount++ != NUM_RETRIES) {
+
+                                // backoff if we encounter an exception.
+                                try {
+                                    Thread.sleep(BACKOFF_TIME_IN_MILLIS);
+                                } catch (InterruptedException e) {
+                                    LOG.debug("Interrupted sleep", e);
+                                }
+                               
+                                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));    
+
+                            } else {
+                                 LOG.error("Couldn't process record " + record + ". Skipping the record.");
+                            }
                         }
+
                     }
-
-                    processedSuccessfully = true;
-                    break;
-                } catch (Throwable t) {
-                    LOG.warn("Caught throwable while processing record " + record, t);
                 }
-
-                // backoff if we encounter an exception.
-                try {
-                    Thread.sleep(BACKOFF_TIME_IN_MILLIS);
-                } catch (InterruptedException e) {
-                    LOG.debug("Interrupted sleep", e);
-                }
+            } catch (Throwable t) {
+                LOG.warn("Caught throwable while processing record " + record, t);
             }
 
-            if (!processedSuccessfully) {
-                LOG.error("Couldn't process record " + record + ". Skipping the record.");
-            }
         }
 
-        for ( Future mqttFuture : futures ) {
-            try{
-                mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
-            } catch(Exception e) {
-                LOG.debug("Bad Future ", e);
+        // for ( Future mqttFuture : futures ) {
+        //     try{
+        //         mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
+        //     } catch(Exception e) {
+        //         LOG.debug("Bad Future ", e);
+        //     }
+        // }
+
+        RecordFuture recordFuture = futureRecords.pop();
+        while( recordFuture != null) {
+
+            for(int j = 0; j < recordFuture.size(); j++) {
+
+                try{
+                    recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                } catch(Throwable t) {
+                    
+
+                    if(recordFuture.retryCount++ != NUM_RETRIES) {
+
+                        // backoff if we encounter an exception.
+                        try {
+                            Thread.sleep(BACKOFF_TIME_IN_MILLIS);
+                        } catch (InterruptedException e) {
+                            LOG.debug("Interrupted sleep", e);
+                        }
+                       
+                        futureRecords.add(new RecordFuture(record, processSingleRecord(record)));    
+
+                    } else {
+                         LOG.error("Couldn't process record " + record + ". Skipping the record.");
+                    }
+                }
             }
+
+            recordFuture = futureRecords.pop();
         }
     }
 
