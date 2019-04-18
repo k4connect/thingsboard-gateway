@@ -23,6 +23,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
 import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.concurrent.Future;
 
@@ -78,26 +79,38 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
         LOG.info("Processing " + records.size() + " records from " + kinesisShardId);
 
         // Process records and perform all exception handling.
-        processRecordsWithRetries(records);
+        
+        try {
+            processRecordsWithRetries(records);
 
-        // Checkpoint once every checkpoint interval.
-        if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
-            checkpoint(checkpointer);
-            nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+            // Checkpoint once every checkpoint interval.
+            if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
+                checkpoint(checkpointer);
+                nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+            }
+        }
+        catch ( Exception e ) {
+            LOG.error("Couldn't process record batch.", e);
         }
     }
 
     public class RecordFuture {
-
-
-        public RecordFuture(ArrayList<Future> futures, Record record) {
-            this.futures = futures;
+        public RecordFuture(Record record, ArrayList<Future> futures) {
             this.record = record;
+            this.futures = futures;
         }
 
-        public ArrayList<Future> futures;
         public Record record;
+        public ArrayList<Future> futures;
         public int retryCount = 0;
+    }
+
+    public class ProcessRecordException extends Exception {
+        public Record record;
+
+        public ProcessRecordException(Record record) {
+            this.record = record;
+        }
     }
 
     /**
@@ -105,74 +118,63 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
      *
      * @param records Data records to be processed.
      */
-    private void processRecordsWithRetries(List<Record> records) {
+    private void processRecordsWithRetries(List<Record> records) throws Exception {
         LinkedList<RecordFuture> futureRecords = new LinkedList<RecordFuture>();
 
+        int recordInvoked = 0;
+        int recordResolved = 0;
+
+        int futureInvoked = 0;
+        int futureRetried = 0;
+        int futureResolved = 0;
+
         for (Record record : records) {
+            //
+            // Logic to process record goes here.
+            //
+            recordInvoked += 1;
+            futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
 
-            boolean processedSuccessfully = false;
-
-
-            try {
-                //
-                // Logic to process record goes here.
-                //
-                // futures.addAll(processSingleRecord(record));
-                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));
-
-                while ( futureRecords.size() > MAX_FUTURES ) {
-
-                    RecordFuture recordFuture = futureRecords.pop();
-                    for(int j = 0; j < recordFuture.size(); j++) {
-
-                        try{
-                            recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
-                        } catch(Throwable t) {
-                            
-
-                            if(recordFuture.retryCount++ != NUM_RETRIES) {
-
-                                // backoff if we encounter an exception.
-                                try {
-                                    Thread.sleep(BACKOFF_TIME_IN_MILLIS);
-                                } catch (InterruptedException e) {
-                                    LOG.debug("Interrupted sleep", e);
-                                }
-                               
-                                futureRecords.add(new RecordFuture(record, processSingleRecord(record)));    
-
-                            } else {
-                                 LOG.error("Couldn't process record " + record + ". Skipping the record.");
+            while ( futureRecords.size() > MAX_FUTURES ) {
+                RecordFuture recordFuture = futureRecords.pollFirst();
+                recordResolved += 1;
+                futureInvoked += recordFuture.futures.size();
+                for (int j = 0; j < recordFuture.futures.size(); j++) {
+                    try {
+                        recordFuture.futures.get(j).get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                        futureResolved += 1;
+                    } catch (Throwable t) {
+                        LOG.error("Retrying record.", t);
+                        if (recordFuture.retryCount++ >= NUM_RETRIES) {
+                            // backoff if we encounter an exception.
+                            try {
+                                Thread.sleep(BACKOFF_TIME_IN_MILLIS);
+                            } catch (InterruptedException e) {
+                                LOG.debug("Interrupted sleep", e);
                             }
+                           
+                            futureRetried += 1;
+                            futureRecords.add(new RecordFuture(recordFuture.record, processSingleRecord(recordFuture.record)));
+                        } else {
+                            LOG.error("Couldn't process record " + recordFuture.record + ". Skipping the record.");
+                            throw new ProcessRecordException(recordFuture.record);
                         }
-
                     }
                 }
-            } catch (Throwable t) {
-                LOG.warn("Caught throwable while processing record " + record, t);
             }
-
         }
 
-        // for ( Future mqttFuture : futures ) {
-        //     try{
-        //         mqttFuture.get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.Seconds);
-        //     } catch(Exception e) {
-        //         LOG.debug("Bad Future ", e);
-        //     }
-        // }
+        RecordFuture recordFuture = futureRecords.pollFirst();
+        while (recordFuture != null) {
+            recordResolved += 1;
+            futureInvoked += recordFuture.futures.size();
+            for (int j = 0; j < recordFuture.futures.size(); j++) {
+                try {
+                    recordFuture.futures.get(j).get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
+                    futureResolved += 1;
 
-        RecordFuture recordFuture = futureRecords.pop();
-        while( recordFuture != null) {
-
-            for(int j = 0; j < recordFuture.size(); j++) {
-
-                try{
-                    recordFuture[j].get(OPERATION_TIMEOUT_IN_SEC, TimeUnit.SECONDS);
-                } catch(Throwable t) {
-                    
-
-                    if(recordFuture.retryCount++ != NUM_RETRIES) {
+                } catch (Throwable t) {
+                    if (recordFuture.retryCount++ >= NUM_RETRIES) {
 
                         // backoff if we encounter an exception.
                         try {
@@ -181,16 +183,24 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
                             LOG.debug("Interrupted sleep", e);
                         }
                        
-                        futureRecords.add(new RecordFuture(record, processSingleRecord(record)));    
-
+                        futureRetried += 1;
+                        futureRecords.add(new RecordFuture(recordFuture.record, processSingleRecord(recordFuture.record)));    
                     } else {
-                         LOG.error("Couldn't process record " + record + ". Skipping the record.");
+                        LOG.error("Couldn't process record " + recordFuture.record + ". Skipping the record.");
+                        throw new ProcessRecordException(recordFuture.record);
                     }
                 }
             }
 
-            recordFuture = futureRecords.pop();
+            recordFuture = futureRecords.pollFirst();
         }
+
+        LOG.info("records: " + records.size());
+        LOG.info("recordInvoked: " + recordInvoked);
+        LOG.info("recordResolved: " + recordResolved);
+        LOG.info("futureInvoked: " + futureInvoked);
+        LOG.info("futureRetried: " + futureRetried);
+        LOG.info("futureResolved: " + futureResolved);
     }
 
     /**
@@ -198,16 +208,9 @@ public class AmazonKinesisApplicationRecordProcessor implements IRecordProcessor
      *
      * @param record The record to be processed.
      */
-    private void processSingleRecord(Record record) {
-        String data = null;
-        try {
-
-            data = decoder.decode(record.getData()).toString();
-            extension.processBody(data);
-
-        } catch (CharacterCodingException e) {
-            LOG.error("Malformed data: " + data, e);
-        }
+    private ArrayList<Future> processSingleRecord (Record record) throws Exception {
+        String data = decoder.decode(record.getData()).toString();
+        return extension.processBody(data);
     }
 
     /**

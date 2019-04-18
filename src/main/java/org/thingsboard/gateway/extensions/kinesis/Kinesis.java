@@ -3,7 +3,7 @@ package org.thingsboard.gateway.extensions.kinesis;
 import lombok.extern.slf4j.Slf4j;
 
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
-import org.thingsboard.gateway.service.gateway.GatewayService;
+import org.thingsboard.gateway.service.GatewayService;
 import org.thingsboard.gateway.service.MqttDeliveryFuture;
 import org.thingsboard.gateway.service.data.DeviceData;
 import org.thingsboard.gateway.util.JsonTools;
@@ -117,41 +117,24 @@ public class Kinesis {
     }
 
     //needs to be called from inside KCL
-    public ArrayList<MqttDeliveryFuture> processBody(String body) {
+    public ArrayList<Future> processBody(String body) throws Exception {
 
         ObjectMapper mapper = new ObjectMapper();
 
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        KinesisMessage message;
-
-
-
-        try {
-            message = mapper.readValue(body, KinesisMessage.class);
-        } catch (Exception e)
-        {
-            log.error("Failed to parse message body. {}", e);
-            return; 
-        }
+        KinesisMessage message = mapper.readValue(body, KinesisMessage.class);
         
-        ArrayList<MqttDeliveryFuture> futures = new ArrayList<MqttDeliveryFuture>();
+        ArrayList<Future> futures = new ArrayList<Future>();
 
-        try {    
-            MqttDeliveryFuture future1 = parseVariablesEvents(message);
-            MqttDeliveryFuture future2 = parseController(message);
+        MqttDeliveryFuture future1 = parseVariablesEvents(message);
+        MqttDeliveryFuture future2 = parseController(message);
 
+        if ( future1 != null ) {
             futures.add(future1);
-            if ( future2 != null ) {
-                futures.add(future2);
-            }
-
-            // waitWithTimeout(future1);
-            // if ( future2 != null ) {
-            //     waitWithTimeout(future2);
-            // }
-        } catch (Exception e) {
-            log.error("Failed to send. Body: {} Exception: {}", body, e);
+        }
+        if ( future2 != null ) {
+            futures.add(future2);
         }
 
         return futures;
@@ -209,7 +192,7 @@ public class Kinesis {
                 
 
                 //Devices/Living Room/Controller/Bridges/Zwave/events/started
-                log.info("Path: {} Type: {} Value: {}", message.path, message.type, message.value);
+                // log.info("Path: {} Type: {} Value: {}", message.path, message.type, message.value);
             }
         }
 
