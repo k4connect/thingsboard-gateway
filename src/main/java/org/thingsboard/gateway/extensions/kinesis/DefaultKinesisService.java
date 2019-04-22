@@ -1,17 +1,17 @@
 package org.thingsboard.gateway.extensions.kinesis;
 
+import static org.thingsboard.gateway.util.ConfigurationTools.readConfiguration;
+import static org.thingsboard.gateway.util.ConfigurationTools.readFileConfiguration;
+
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
+
+import org.thingsboard.gateway.service.conf.TbExtensionConfiguration;
+import org.thingsboard.gateway.extensions.ExtensionUpdate;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisConfiguration;
 import org.thingsboard.gateway.extensions.kinesis.conf.KinesisStreamConfiguration;
 import org.thingsboard.gateway.service.gateway.GatewayService;
-import org.thingsboard.gateway.util.ConfigurationTools;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -20,51 +20,77 @@ import java.util.stream.Stream;
 /**
  * Created by ashvayka on 15.05.17.
  */
-@Service
-@ConditionalOnProperty(prefix = "kinesis", value = "enabled", havingValue = "true", matchIfMissing = false)
 @Slf4j
-public class DefaultKinesisService {
-    @Autowired
-    private GatewayService service;
+public class DefaultKinesisService extends ExtensionUpdate {
 
-    @Value("${kinesis.configuration}")
-    private String configurationFile;
-
+    private final GatewayService gateway;
+    private TbExtensionConfiguration currentConfiguration;
     private List<Kinesis> kinesisStreams;
 
 
-    @PostConstruct
-    public void init() throws Exception {
-        log.info("Initializing Kinesis service!");
+    public DefaultKinesisService(GatewayService gateway) {
+        this.gateway = gateway;
+    }
 
-        KinesisConfiguration configuration = configureService();
+
+    @Override
+    public TbExtensionConfiguration getCurrentConfiguration() {
+        return currentConfiguration;
+    }
+
+
+    protected DefaultKinesisService currentConfiguration(TbExtensionConfiguration configurationNode) {
+        currentConfiguration = configurationNode;
+
+        return this;
+    }
+
+
+    @Override
+    public void init(TbExtensionConfiguration configurationNode, Boolean isRemote)
+        throws Exception {
+
+        currentConfiguration(configurationNode);
+
+        log.info("[{}] Initializing Kinesis service", gateway.getTenantLabel());
+
+        KinesisConfiguration configuration = configureService(isRemote);
 
         initializeService(configuration);
     }
 
 
-    protected KinesisConfiguration configureService() throws Exception {
-        KinesisConfiguration configuration;
+    protected KinesisConfiguration configureService(Boolean isRemote)
+        throws IOException {
+
+        KinesisConfiguration kinesisConfiguration;
 
         try {
-            configuration = ConfigurationTools.readFileConfiguration(configurationFile, KinesisConfiguration.class);
-        } catch (Exception e) {
-            log.error("Kinesis service configuration failed!", e);
+            if (isRemote) {
+                kinesisConfiguration =
+                    readConfiguration(currentConfiguration.getConfiguration(), KinesisConfiguration.class);
+            } else {
+                kinesisConfiguration =
+                    readFileConfiguration(currentConfiguration.getExtensionConfiguration(), KinesisConfiguration.class);
+            }
+        } catch (IOException e) {
+            log.error("[{}] Kinesis service configuration failed!", gateway.getTenantLabel(), e);
+            gateway.onConfigurationError(e, currentConfiguration);
             throw e;
         }
 
-        return configuration;
+        return kinesisConfiguration;
     }
 
 
-    protected void initializeService(KinesisConfiguration configuration) {
+    protected void initializeService(KinesisConfiguration kinesisConfiguration) {
         try {
             Stream<KinesisStreamConfiguration> configurationStream =
-                configuration.getKinesisStreamConfigurations().stream();
+                kinesisConfiguration.getKinesisStreamConfigurations().stream();
 
             kinesisStreams =
                 configurationStream.map(config ->
-                    buildKinesis(service, config)).collect(Collectors.toList()
+                    buildKinesis(gateway, config)).collect(Collectors.toList()
                 );
 
             kinesisStreams.forEach(Kinesis::init);
@@ -81,8 +107,8 @@ public class DefaultKinesisService {
     }
 
 
-    @PreDestroy
-    public void preDestroy() {
+    @Override
+    public void destroy() {
         if (kinesisStreams != null) {
             kinesisStreams.forEach(Kinesis::stop);
         }
